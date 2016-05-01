@@ -32,6 +32,26 @@
 
 #ifdef SFML_OPENGL_ES
 
+    // Raspberry Pi specific hackery...
+    //
+    #ifdef SFML_RPI
+        // Workaround the rpi's GLES1 not implementing glBlendQuationOES
+        #ifndef GLEXT_glBlendEquationOES
+            #include <GLES2/gl2.h>
+            #define GLEXT_glBlendEquationOES              glBlendEquation
+        #endif
+
+        // Workaround no sRGB defined
+        #ifndef GL_EXT_sRGB
+            #define GL_EXT_sRGB                           0
+        #endif
+
+        // Maybe not the best place for this, needed for Texture.cpp compile...
+        #ifndef GL_SRGB8_ALPHA8_EXT
+            #define GL_SRGB8_ALPHA8_EXT                   0x8C43
+        #endif
+    #endif
+
     #include <SFML/OpenGL.hpp>
 
     // SFML requires at a bare minimum OpenGL ES 1.0 capability

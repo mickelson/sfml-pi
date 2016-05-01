@@ -149,7 +149,7 @@ public:
     ////////////////////////////////////////////////////////////
     static EGLConfig getBestConfig(EGLDisplay display, unsigned int bitsPerPixel, const ContextSettings& settings);
 
-#ifdef SFML_SYSTEM_LINUX
+#if defined(SFML_SYSTEM_LINUX) && !defined(SFML_RPI)
     ////////////////////////////////////////////////////////////
     /// \brief Select the best EGL visual for a given set of settings
     ///

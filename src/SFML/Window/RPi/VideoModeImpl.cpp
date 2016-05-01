@@ -1,7 +1,9 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2015 Laurent Gomila (laurent@sfml-dev.org)
+//
+// Raspberry Pi dispmanx implementation
+// Copyright (C) 2016 Andrew Mickelson
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -22,29 +24,41 @@
 //
 ////////////////////////////////////////////////////////////
 
-#ifndef SFML_INPUTIMPL_HPP
-#define SFML_INPUTIMPL_HPP
-
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/Config.hpp>
+#include <SFML/Window/VideoModeImpl.hpp>
+#include <bcm_host.h>
 
-#if defined(SFML_SYSTEM_WINDOWS)
-    #include <SFML/Window/Win32/InputImpl.hpp>
-#elif defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_FREEBSD)
-    #if defined(SFML_RPI)
-        #include <SFML/Window/RPi/InputImpl.hpp>
-    #else
-        #include <SFML/Window/Unix/InputImpl.hpp>
-    #endif
-#elif defined(SFML_SYSTEM_MACOS)
-    #include <SFML/Window/OSX/InputImpl.hpp>
-#elif defined(SFML_SYSTEM_IOS)
-    #include <SFML/Window/iOS/InputImpl.hpp>
-#elif defined(SFML_SYSTEM_ANDROID)
-    #include <SFML/Window/Android/InputImpl.hpp>
-#endif
+namespace sf
+{
+namespace priv
+{
+////////////////////////////////////////////////////////////
+std::vector<VideoMode> VideoModeImpl::getFullscreenModes()
+{
+    std::vector<VideoMode> modes;
+    modes.push_back(getDesktopMode());
+    return modes;
+}
 
 
-#endif // SFML_INPUTIMPL_HPP
+////////////////////////////////////////////////////////////
+VideoMode VideoModeImpl::getDesktopMode()
+{
+    static bool initialized=false;
+
+    if (!initialized)
+    {
+        bcm_host_init();
+        initialized=true;
+    }
+
+    uint32_t width( 0 ), height( 0 );
+    graphics_get_display_size( 0 /* LCD */, &width, &height );
+    return VideoMode(width, height);
+}
+
+} // namespace priv
+
+} // namespace sf

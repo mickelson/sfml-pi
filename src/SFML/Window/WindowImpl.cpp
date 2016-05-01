@@ -40,8 +40,13 @@
 
 #elif defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_FREEBSD)
 
-    #include <SFML/Window/Unix/WindowImplX11.hpp>
-    typedef sf::priv::WindowImplX11 WindowImplType;
+    #if defined(SFML_RPI)
+        #include <SFML/Window/RPi/WindowImplRPi.hpp>
+        typedef sf::priv::WindowImplRPi WindowImplType;
+    #else
+        #include <SFML/Window/Unix/WindowImplX11.hpp>
+        typedef sf::priv::WindowImplX11 WindowImplType;
+    #endif
 
 #elif defined(SFML_SYSTEM_MACOS)
 

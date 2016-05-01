@@ -140,6 +140,18 @@ if(SFML_COMPILER_MSVC)
     add_definitions(-D_CRT_SECURE_NO_DEPRECATE -D_SCL_SECURE_NO_WARNINGS)
 endif()
 
+#check if we are building for a Raspberry Pi
+if(SFML_RPI)
+    add_definitions(-DSFML_RPI)
+
+    if(NOT CMAKE_CROSSCOMPILING)
+        # bcmhost.h seems to assume these directories are in the include path
+        include_directories(/opt/vc/include/interface/vcos/pthreads /opt/vc/include/interface/vmcs_host/linux)
+    endif()
+
+    set(SFML_OPENGL_ES 1)
+endif()
+
 # define SFML_OPENGL_ES if needed
 if(SFML_OPENGL_ES)
     add_definitions(-DSFML_OPENGL_ES)

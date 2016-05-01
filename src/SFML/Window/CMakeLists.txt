@@ -70,19 +70,33 @@ if(SFML_OS_WINDOWS)
     # make sure that we use the Unicode version of the Win API functions
     add_definitions(-DUNICODE -D_UNICODE)
 elseif(SFML_OS_LINUX OR SFML_OS_FREEBSD)
-    set(PLATFORM_SRC
-        ${SRCROOT}/Unix/Display.cpp
-        ${SRCROOT}/Unix/Display.hpp
-        ${SRCROOT}/Unix/InputImpl.cpp
-        ${SRCROOT}/Unix/InputImpl.hpp
-        ${SRCROOT}/Unix/ScopedXcbPtr.hpp
-        ${SRCROOT}/Unix/ScopedXcbPtr.inl
-        ${SRCROOT}/Unix/SensorImpl.cpp
-        ${SRCROOT}/Unix/SensorImpl.hpp
-        ${SRCROOT}/Unix/VideoModeImpl.cpp
-        ${SRCROOT}/Unix/WindowImplX11.cpp
-        ${SRCROOT}/Unix/WindowImplX11.hpp
-    )
+    if(NOT SFML_RPI)
+        set(PLATFORM_SRC
+            ${SRCROOT}/Unix/Display.cpp
+            ${SRCROOT}/Unix/Display.hpp
+            ${SRCROOT}/Unix/InputImpl.cpp
+            ${SRCROOT}/Unix/InputImpl.hpp
+            ${SRCROOT}/Unix/ScopedXcbPtr.hpp
+            ${SRCROOT}/Unix/ScopedXcbPtr.inl
+            ${SRCROOT}/Unix/SensorImpl.cpp
+            ${SRCROOT}/Unix/SensorImpl.hpp
+            ${SRCROOT}/Unix/VideoModeImpl.cpp
+            ${SRCROOT}/Unix/WindowImplX11.cpp
+            ${SRCROOT}/Unix/WindowImplX11.hpp
+        )
+    else()
+        set(PLATFORM_SRC
+            ${PLATFORM_SRC}
+            ${SRCROOT}/RPi/InputImpl.cpp
+            ${SRCROOT}/RPi/InputImpl.hpp
+            ${SRCROOT}/Unix/SensorImpl.cpp
+            ${SRCROOT}/Unix/SensorImpl.hpp
+            ${SRCROOT}/RPi/VideoModeImpl.cpp
+            ${SRCROOT}/RPi/WindowImplRPi.cpp
+            ${SRCROOT}/RPi/WindowImplRPi.hpp
+        )
+    endif()
+
     if(NOT SFML_OPENGL_ES)
         set(PLATFORM_SRC
             ${PLATFORM_SRC}
@@ -195,7 +209,7 @@ elseif(SFML_OS_ANDROID)
 endif()
 
 # find external libraries
-if(SFML_OS_LINUX OR SFML_OS_FREEBSD)
+if((SFML_OS_LINUX OR SFML_OS_FREEBSD) AND NOT SFML_RPI)
     find_package(X11 REQUIRED)
     if(NOT X11_FOUND)
         message(FATAL_ERROR "X11 library not found")
@@ -231,7 +245,10 @@ endif()
 if(SFML_OS_WINDOWS)
     list(APPEND WINDOW_EXT_LIBS winmm gdi32)
 elseif(SFML_OS_LINUX)
-    list(APPEND WINDOW_EXT_LIBS ${X11_X11_LIB} ${LIBXCB_LIBRARIES} ${UDEV_LIBRARIES})
+    if(NOT SFML_RPI)
+        list(APPEND WINDOW_EXT_LIBS ${X11_X11_LIB} ${LIBXCB_LIBRARIES})
+    endif()
+    list(APPEND WINDOW_EXT_LIBS ${UDEV_LIBRARIES})
 elseif(SFML_OS_FREEBSD)
     list(APPEND WINDOW_EXT_LIBS ${X11_X11_LIB} ${LIBXCB_LIBRARIES} usbhid)
 elseif(SFML_OS_MACOSX)

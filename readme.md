@@ -1,7 +1,7 @@
 SFML-Pi
 =======
 
-SFML on the Raspberry Pi with hardware accelerated graphics and no X11 dependency.
+SFML on the Raspberry Pi with hardware graphics and no X11 dependency.
 
 Install
 -------
@@ -34,4 +34,4 @@ graphics and no need to be running X.
 
 More Info
 ---------
-Please consult the SFML readme for more info: [readme-sfml.txt][]
+Please consult the SFML readme for more info: [readme.txt][]

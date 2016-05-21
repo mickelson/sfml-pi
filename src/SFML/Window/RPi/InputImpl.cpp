@@ -399,7 +399,7 @@ bool InputImpl::checkEvent( sf::Event &ev )
                     if ( special )
                     {
                         ev.type = sf::Event::TextEntered;
-                        ev.text.unicode = ( kb == sf::Keyboard::Delete ) ? 127 : 8;
+                        ev.text.unicode = special;
                         return true;
                     }
                 }

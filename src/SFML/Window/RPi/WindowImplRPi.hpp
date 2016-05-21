@@ -180,6 +180,7 @@ protected:
 
 private:
 
+    DISPMANX_DISPLAY_HANDLE_T m_display;
     EGL_DISPMANX_WINDOW_T m_nativeWindow;
 };
 

@@ -13,7 +13,7 @@ Install
   x11 ones... x11, xrandr, xcb*).
 - The command on rasbian should look something like this:
 
-`sudo apt-get install cmake libflac-dev libogg-dev libvorbis-dev libopenal-dev libjpeg8-dev libfreetype6-dev libudev-dev`
+`sudo apt-get install cmake libflac-dev libogg-dev libvorbis-dev libopenal-dev libjpeg8-dev libfreetype6-dev libudev-dev libraspberrypi-dev`
 
 **Step 2:** Build SFML-Pi
 

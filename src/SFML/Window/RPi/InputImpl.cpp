@@ -36,6 +36,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <queue>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -57,6 +58,9 @@ namespace
     std::vector<int>  fds;                                     // list of open file descriptors for /dev/input
     std::vector<bool> mouseMap(sf::Mouse::ButtonCount, false); // track whether keys are down
     std::vector<bool> keyMap(sf::Keyboard::KeyCount, false);   // track whether mouse buttons are down
+
+    std::queue<sf::Event> eventQueue;                          // events received and waiting to be consumed
+    const int MAX_QUEUE = 64;                                  // The maximum size we let eventQueue grow to
 
     bool altDown() { return ( keyMap[sf::Keyboard::LAlt] || keyMap[sf::Keyboard::RAlt] ); }
     bool controlDown() { return ( keyMap[sf::Keyboard::LControl] || keyMap[sf::Keyboard::RControl] ); }
@@ -232,6 +236,203 @@ namespace
                return sf::Keyboard::Unknown;
         }
     }
+
+    bool eventProcess( sf::Event &ev )
+    {
+        sf::Lock lock( inpMutex );
+
+        // Ensure that we are initialized
+        //
+        static bool initialized = false;
+        if ( !initialized )
+        {
+            init();
+            initialized = true;
+        }
+
+        // This is for handling the Backspace and DEL text events, which we
+        // generate based on keystrokes (and not stdin)
+        //
+        static int doDeferredText=0;
+        if ( doDeferredText )
+        {
+            ev.type = sf::Event::TextEntered;
+            ev.text.unicode = doDeferredText;
+            doDeferredText = 0;
+            return true;
+        }
+
+        // Check all the open file descriptors for the next event
+        //
+        for ( std::vector<int>::iterator itr=fds.begin(); itr != fds.end(); ++itr )
+        {
+            struct input_event ie;
+            int rd = read(
+                *itr,
+                &ie,
+                sizeof( ie ) );
+
+            while ( rd > 0 )
+            {
+                if ( ie.type == EV_KEY )
+                {
+                    sf::Mouse::Button mb = toMouseButton( ie.code );
+                    if ( mb != sf::Mouse::ButtonCount )
+                    {
+                        ev.type = ie.value ? sf::Event::MouseButtonPressed : sf::Event::MouseButtonReleased;
+                        ev.mouseButton.button = mb;
+                        ev.mouseButton.x = mousePos.x;
+                        ev.mouseButton.y = mousePos.y;
+
+                        mouseMap[mb] = ie.value;
+                        return true;
+                    }
+                    else
+                    {
+                        sf::Keyboard::Key kb = toKey( ie.code );
+
+                        int special = 0;
+                        if (( kb == sf::Keyboard::Delete )
+                                || ( kb == sf::Keyboard::BackSpace ))
+                            special = ( kb == sf::Keyboard::Delete ) ? 127 : 8;
+
+                        if ( ie.value == 2 )
+                        {
+                            // key repeat events
+                            //
+                            if ( special )
+                            {
+                                ev.type = sf::Event::TextEntered;
+                                ev.text.unicode = special;
+                                return true;
+                            }
+                        }
+                        else if ( kb != sf::Keyboard::Unknown )
+                        {
+                            // key down and key up events
+                            //
+                            ev.type = ie.value ? sf::Event::KeyPressed : sf::Event::KeyReleased;
+                            ev.key.code = kb;
+                            ev.key.alt = altDown();
+                            ev.key.control = controlDown();
+                            ev.key.shift = shiftDown();
+                            ev.key.system = systemDown();
+
+                            keyMap[kb] = ie.value;
+
+                            if ( special && ie.value )
+                                doDeferredText = special;
+
+                            return true;
+                        }
+                    }
+                }
+                else if ( ie.type == EV_REL )
+                {
+                    bool posChange = false;
+                    switch ( ie.code )
+                    {
+                    case REL_X:
+                        mousePos.x += ie.value;
+                        posChange = true;
+                        break;
+
+                    case REL_Y:
+                        mousePos.y += ie.value;
+                        posChange = true;
+                        break;
+
+                    case REL_WHEEL:
+                        ev.type = sf::Event::MouseWheelMoved;
+                        ev.mouseWheel.delta = ie.value;
+                        ev.mouseWheel.x = mousePos.x;
+                        ev.mouseWheel.y = mousePos.y;
+                        return true;
+                    }
+
+                    if ( posChange )
+                    {
+                        ev.type = sf::Event::MouseMoved;
+                        ev.mouseMove.x = mousePos.x;
+                        ev.mouseMove.y = mousePos.y;
+                        return true;
+                    }
+                }
+
+                rd = read( *itr, &ie, sizeof( ie ) );
+            }
+
+            if (( rd < 0 ) && ( errno != EAGAIN ))
+                sf::err() << " Error: " << strerror( errno ) << std::endl;
+        }
+
+        // Finally check if there is a Text event on stdin
+        //
+        struct termios newt, oldt;
+        tcgetattr( STDIN_FILENO, &oldt );
+
+        newt = oldt;
+        newt.c_lflag &= ~( ICANON | ECHO );
+        tcsetattr( STDIN_FILENO, TCSANOW, &newt );
+
+        struct timeval tv;
+        tv.tv_sec = 0;
+        tv.tv_usec = 0;
+
+        unsigned char c=0;
+
+        fd_set rdfs;
+        FD_ZERO( &rdfs );
+        FD_SET( STDIN_FILENO, &rdfs );
+        select( STDIN_FILENO+1, &rdfs, NULL, NULL, &tv );
+
+        if ( FD_ISSET( STDIN_FILENO, &rdfs ) )
+            read( STDIN_FILENO, &c, 1 );
+
+        if (( c == 127 ) || ( c == 8 ))  // Suppress 127 (DEL) to 8 (BACKSPACE)
+            c = 0;
+        else if ( c == 27 )  // ESC
+        {
+            // Suppress ANSI escape sequences
+            //
+            FD_ZERO( &rdfs );
+            FD_SET( STDIN_FILENO, &rdfs );
+            select( STDIN_FILENO+1, &rdfs, NULL, NULL, &tv );
+            if ( FD_ISSET( STDIN_FILENO, &rdfs ) )
+            {
+                unsigned char buff[16];
+                int rd = read( STDIN_FILENO, buff, 16 );
+                c = 0;
+            }
+        }
+
+        tcsetattr( STDIN_FILENO, TCSANOW, &oldt );
+
+        if ( c > 0 )
+        {
+            // TODO: Proper unicode handling
+            ev.type = sf::Event::TextEntered;
+            ev.text.unicode = c;
+            return true;
+        }
+
+        // No events available
+        //
+        return false;
+    }
+
+    // assumes inpMutex is locked
+    void update()
+    {
+        sf::Event ev;
+        while ( eventProcess( ev ) )
+        {
+            if ( eventQueue.size() >= MAX_QUEUE )
+                eventQueue.pop();
+
+            eventQueue.push( ev );
+        }
+    }
 };
 
 namespace sf
@@ -245,9 +446,7 @@ bool InputImpl::isKeyPressed(Keyboard::Key key)
     if (( key < 0 ) || ( key >= keyMap.size() ))
         return false;
 
-    // TODO: Note that we are only returning the state as of the last
-    // call to checkEvent().  There could be an intervening change...
-    //
+    update();
     return keyMap[key];
 }
 
@@ -266,9 +465,7 @@ bool InputImpl::isMouseButtonPressed(Mouse::Button button)
     if (( button < 0 ) || ( button >= mouseMap.size() ))
         return false;
 
-    // TODO: Note that we are only returning the state as of the last
-    // call to checkEvent().  There could be an intervening change...
-    //
+    update();
     return mouseMap[button];
 }
 
@@ -330,185 +527,15 @@ Vector2i InputImpl::getTouchPosition(unsigned int /*finger*/, const Window& /*re
 bool InputImpl::checkEvent( sf::Event &ev )
 {
     Lock lock( inpMutex );
-
-    // Ensure that we are initialized
-    //
-    static bool initialized = false;
-    if ( !initialized )
+    if ( !eventQueue.empty() )
     {
-        init();
-        initialized = true;
-    }
+        ev = eventQueue.front();
+        eventQueue.pop();
 
-    // This is for handling the Backspace and DEL text events, which we
-    // generate based on keystrokes (and not stdin)
-    //
-    static int doDeferredText=0;
-    if ( doDeferredText )
-    {
-        ev.type = sf::Event::TextEntered;
-        ev.text.unicode = doDeferredText;
-        doDeferredText = 0;
         return true;
     }
 
-    // Check all the open file descriptors for the next event
-    //
-    for ( std::vector<int>::iterator itr=fds.begin(); itr != fds.end(); ++itr )
-    {
-        struct input_event ie;
-        int rd = read(
-            *itr,
-            &ie,
-            sizeof( ie ) );
-
-        if ( rd < 0 )
-        {
-            if ( errno != EAGAIN )
-                sf::err() << " Error: " << strerror( errno ) << std::endl;
-
-            continue;
-        }
-
-        if ( ie.type == EV_KEY )
-        {
-            sf::Mouse::Button mb = toMouseButton( ie.code );
-            if ( mb != sf::Mouse::ButtonCount )
-            {
-                ev.type = ie.value ? sf::Event::MouseButtonPressed : sf::Event::MouseButtonReleased;
-                ev.mouseButton.button = mb;
-                ev.mouseButton.x = mousePos.x;
-                ev.mouseButton.y = mousePos.y;
-
-                mouseMap[mb] = ie.value;
-                return true;
-            }
-            else
-            {
-                sf::Keyboard::Key kb = toKey( ie.code );
-
-                int special = 0;
-                if (( kb == sf::Keyboard::Delete )
-                        || ( kb == sf::Keyboard::BackSpace ))
-                    special = ( kb == sf::Keyboard::Delete ) ? 127 : 8;
-
-                if ( ie.value == 2 )
-                {
-                    // key repeat events
-                    //
-                    if ( special )
-                    {
-                        ev.type = sf::Event::TextEntered;
-                        ev.text.unicode = special;
-                        return true;
-                    }
-                }
-                else if ( kb != sf::Keyboard::Unknown )
-                {
-                    // key down and key up events
-                    //
-                    ev.type = ie.value ? sf::Event::KeyPressed : sf::Event::KeyReleased;
-                    ev.key.code = kb;
-                    ev.key.alt = altDown();
-                    ev.key.control = controlDown();
-                    ev.key.shift = shiftDown();
-                    ev.key.system = systemDown();
-
-                    keyMap[kb] = ie.value;
-
-                    if ( special && ie.value )
-                        doDeferredText = special;
-
-                    return true;
-                }
-            }
-        }
-        else if ( ie.type == EV_REL )
-        {
-            bool posChange = false;
-            switch ( ie.code )
-            {
-            case REL_X:
-                mousePos.x += ie.value;
-                posChange = true;
-                break;
-
-            case REL_Y:
-                mousePos.y += ie.value;
-                posChange = true;
-                break;
-
-            case REL_WHEEL:
-                ev.type = sf::Event::MouseWheelMoved;
-                ev.mouseWheel.delta = ie.value;
-                ev.mouseWheel.x = mousePos.x;
-                ev.mouseWheel.y = mousePos.y;
-                return true;
-            }
-
-            if ( posChange )
-            {
-                ev.type = sf::Event::MouseMoved;
-                ev.mouseMove.x = mousePos.x;
-                ev.mouseMove.y = mousePos.y;
-                return true;
-            }
-        }
-    }
-
-    // Finally check if there is a Text event on stdin
-    //
-    struct termios newt, oldt;
-    tcgetattr( STDIN_FILENO, &oldt );
-
-    newt = oldt;
-    newt.c_lflag &= ~( ICANON | ECHO );
-    tcsetattr( STDIN_FILENO, TCSANOW, &newt );
-
-    struct timeval tv;
-    tv.tv_sec = 0;
-    tv.tv_usec = 0;
-
-    unsigned char c=0;
-
-    fd_set rdfs;
-    FD_ZERO( &rdfs );
-    FD_SET( STDIN_FILENO, &rdfs );
-    select( STDIN_FILENO+1, &rdfs, NULL, NULL, &tv );
-
-    if ( FD_ISSET( STDIN_FILENO, &rdfs ) )
-        read( STDIN_FILENO, &c, 1 );
-
-    if (( c == 127 ) || ( c == 8 ))  // Suppress 127 (DEL) to 8 (BACKSPACE)
-        c = 0;
-    else if ( c == 27 )  // ESC
-    {
-        // Suppress ANSI escape sequences
-        //
-        FD_ZERO( &rdfs );
-        FD_SET( STDIN_FILENO, &rdfs );
-        select( STDIN_FILENO+1, &rdfs, NULL, NULL, &tv );
-        if ( FD_ISSET( STDIN_FILENO, &rdfs ) )
-        {
-            unsigned char buff[16];
-            int rd = read( STDIN_FILENO, buff, 16 );
-            c = 0;
-        }
-    }
-
-    tcsetattr( STDIN_FILENO, TCSANOW, &oldt );
-
-    if ( c > 0 )
-    {
-        // TODO: Proper unicode handling
-        ev.type = sf::Event::TextEntered;
-        ev.text.unicode = c;
-        return true;
-    }
-
-    // No events available
-    //
-    return false;
+    return eventProcess( ev );
 }
 
 } // namespace priv

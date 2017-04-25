@@ -56,6 +56,8 @@ public:
     ////////////////////////////////////////////////////////////
     WindowImplRPi(WindowHandle handle);
 
+    void setMouseCursorGrabbed(bool grabbed) override;
+
     ////////////////////////////////////////////////////////////
     /// \brief Create the window implementation
     ///

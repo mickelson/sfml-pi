@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2015 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2017 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -185,6 +185,14 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     virtual void setMouseCursorVisible(bool visible) = 0;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Grab or release the mouse cursor and keeps it from leaving
+    ///
+    /// \param grabbed True to enable, false to disable
+    ///
+    ////////////////////////////////////////////////////////////
+    virtual void setMouseCursorGrabbed(bool grabbed) = 0;
 
     ////////////////////////////////////////////////////////////
     /// \brief Enable or disable automatic key-repeat

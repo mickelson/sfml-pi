@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2015 Marco Antognini (antognini.marco@gmail.com),
+// Copyright (C) 2007-2017 Marco Antognini (antognini.marco@gmail.com),
 //                         Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
@@ -95,6 +95,14 @@ namespace sf {
 ///
 ////////////////////////////////////////////////////////////
 -(BOOL)isMouseInside;
+
+////////////////////////////////////////////////////////////
+/// \brief Grab or release the mouse cursor
+///
+/// \param grabbed YES to grab, NO to release
+///
+////////////////////////////////////////////////////////////
+-(void)setCursorGrabbed:(BOOL)grabbed;
 
 ////////////////////////////////////////////////////////////
 /// \brief Get window position

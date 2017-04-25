@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2015 Marco Antognini (antognini.marco@gmail.com),
+// Copyright (C) 2007-2017 Marco Antognini (antognini.marco@gmail.com),
 //                         Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
@@ -108,6 +108,9 @@
 
         m_fullscreen = isFullscreen;
         m_scaleFactor = 1.0; // Default value; it will be updated in finishInit
+        m_cursorGrabbed = NO;
+        m_deltaXBuffer = 0;
+        m_deltaYBuffer = 0;
 
         // Create a hidden text view for parsing key down event properly
         m_silentResponder = [[SFSilentResponder alloc] init];
@@ -163,8 +166,9 @@
                                                  name:NSWindowDidChangeScreenProfileNotification
                                                object:[self window]];
 
-    // Now that we have a window, set up correctly the scale factor
+    // Now that we have a window, set up correctly the scale factor and cursor grabbing
     [self updateScaleFactor];
+    [self updateCursorGrabbed]; // update for fullscreen
 }
 
 
@@ -245,6 +249,7 @@
 
     // Update mouse internal state.
     [self updateMouseState];
+    [self updateCursorGrabbed];
 
     // Update the OGL view to fit the new size.
     [self update];
@@ -263,6 +268,8 @@
 {
     (void)notification;
 
+    [self updateCursorGrabbed];
+
     if (m_requester)
         m_requester->windowGainedFocus();
 
@@ -275,6 +282,8 @@
 -(void)windowDidResignKey:(NSNotification*)notification
 {
     (void)notification;
+
+    [self updateCursorGrabbed];
 
     if (m_requester)
         m_requester->windowLostFocus();

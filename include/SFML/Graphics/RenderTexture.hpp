@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2015 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2017 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -132,6 +132,22 @@ public:
     bool isRepeated() const;
 
     ////////////////////////////////////////////////////////////
+    /// \brief Generate a mipmap using the current texture data
+    ///
+    /// This function is similar to Texture::generateMipmap and operates
+    /// on the texture used as the target for drawing.
+    /// Be aware that any draw operation may modify the base level image data.
+    /// For this reason, calling this function only makes sense after all
+    /// drawing is completed and display has been called. Not calling display
+    /// after subsequent drawing will lead to undefined behavior if a mipmap
+    /// had been previously generated.
+    ///
+    /// \return True if mipmap generation was successful, false if unsuccessful
+    ///
+    ////////////////////////////////////////////////////////////
+    bool generateMipmap();
+
+    ////////////////////////////////////////////////////////////
     /// \brief Activate or deactivate the render-texture for rendering
     ///
     /// This function makes the render-texture's context current for
@@ -187,19 +203,6 @@ public:
     const Texture& getTexture() const;
 
 private:
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Activate the target for rendering
-    ///
-    /// This function is called by the base class
-    /// everytime it's going to use OpenGL calls.
-    ///
-    /// \param active True to make the target active, false to deactivate it
-    ///
-    /// \return True if the function succeeded
-    ///
-    ////////////////////////////////////////////////////////////
-    virtual bool activate(bool active);
 
     ////////////////////////////////////////////////////////////
     // Member data

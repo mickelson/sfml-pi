@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2015 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2017 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -254,11 +254,12 @@ private:
     /// playing queue.
     ///
     /// \param bufferNum Number of the buffer to fill (in [0, BufferCount])
+    /// \param immediateLoop Treat empty buffers as spent, and act on loops immediately
     ///
     /// \return True if the stream source has requested to stop, false otherwise
     ///
     ////////////////////////////////////////////////////////////
-    bool fillAndPushBuffer(unsigned int bufferNum);
+    bool fillAndPushBuffer(unsigned int bufferNum, bool immediateLoop = false);
 
     ////////////////////////////////////////////////////////////
     /// \brief Fill the audio buffers and put them all into the playing queue
@@ -281,7 +282,8 @@ private:
 
     enum
     {
-        BufferCount = 3 ///< Number of audio buffers used by the streaming loop
+        BufferCount = 3,    ///< Number of audio buffers used by the streaming loop
+        BufferRetries = 2   ///< Number of retries (excluding initial try) for onGetData()
     };
 
     ////////////////////////////////////////////////////////////

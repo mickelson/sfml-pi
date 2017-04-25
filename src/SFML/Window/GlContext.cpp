@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2015 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2017 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -26,14 +26,19 @@
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Window/GlContext.hpp>
+#include <SFML/Window/Context.hpp>
 #include <SFML/System/ThreadLocalPtr.hpp>
 #include <SFML/System/Mutex.hpp>
 #include <SFML/System/Lock.hpp>
 #include <SFML/System/Err.hpp>
 #include <SFML/OpenGL.hpp>
+#include <algorithm>
+#include <vector>
+#include <string>
 #include <set>
 #include <cstdlib>
 #include <cstring>
+#include <cassert>
 
 #if !defined(SFML_OPENGL_ES)
 
@@ -126,7 +131,13 @@ namespace
     // AMD drivers have issues with internal synchronization
     // We need to make sure that no operating system context
     // or pixel format operations are performed simultaneously
+    // This mutex is also used to protect the shared context
+    // from being locked on multiple threads and for managing
+    // the resource count
     sf::Mutex mutex;
+
+    // OpenGL resources counter
+    unsigned int resourceCount = 0;
 
     // This per-thread variable holds the current context for each thread
     sf::ThreadLocalPtr<sf::priv::GlContext> currentContext(NULL);
@@ -134,35 +145,60 @@ namespace
     // The hidden, inactive context that will be shared with all other contexts
     ContextType* sharedContext = NULL;
 
-    // Internal contexts
-    sf::ThreadLocalPtr<sf::Context> internalContext(NULL);
-    std::set<sf::Context*> internalContexts;
-    sf::Mutex internalContextsMutex;
-
-    // Check if the internal context of the current thread is valid
-    bool hasInternalContext()
+    // This structure contains all the state necessary to
+    // track TransientContext usage
+    struct TransientContext : private sf::NonCopyable
     {
-        // The internal context can be null...
-        if (!internalContext)
-            return false;
-
-        // ... or non-null but deleted from the list of internal contexts
-        sf::Lock lock(internalContextsMutex);
-        return internalContexts.find(internalContext) != internalContexts.end();
-    }
-
-    // Retrieve the internal context for the current thread
-    sf::Context* getInternalContext()
-    {
-        if (!hasInternalContext())
+        ////////////////////////////////////////////////////////////
+        /// \brief Constructor
+        ///
+        ////////////////////////////////////////////////////////////
+        TransientContext() :
+        referenceCount   (0),
+        context          (0),
+        sharedContextLock(0),
+        useSharedContext (false)
         {
-            internalContext = new sf::Context;
-            sf::Lock lock(internalContextsMutex);
-            internalContexts.insert(internalContext);
+            if (resourceCount == 0)
+            {
+                context = new sf::Context;
+            }
+            else if (!currentContext)
+            {
+                sharedContextLock = new sf::Lock(mutex);
+                useSharedContext = true;
+                sharedContext->setActive(true);
+            }
         }
 
-        return internalContext;
-    }
+        ////////////////////////////////////////////////////////////
+        /// \brief Destructor
+        ///
+        ////////////////////////////////////////////////////////////
+        ~TransientContext()
+        {
+            if (useSharedContext)
+                sharedContext->setActive(false);
+
+            delete sharedContextLock;
+            delete context;
+        }
+
+        ///////////////////////////////////////////////////////////
+        // Member data
+        ////////////////////////////////////////////////////////////
+        unsigned int referenceCount;
+        sf::Context* context;
+        sf::Lock*    sharedContextLock;
+        bool         useSharedContext;
+    };
+
+    // This per-thread variable tracks if and how a transient
+    // context is currently being used on the current thread
+    sf::ThreadLocalPtr<TransientContext> transientContext(NULL);
+
+    // Supported OpenGL extensions
+    std::vector<std::string> extensions;
 }
 
 
@@ -171,60 +207,163 @@ namespace sf
 namespace priv
 {
 ////////////////////////////////////////////////////////////
-void GlContext::globalInit()
+void GlContext::initResource()
 {
+    // Protect from concurrent access
     Lock lock(mutex);
 
-    if (sharedContext)
-        return;
+    // If this is the very first resource, trigger the global context initialization
+    if (resourceCount == 0)
+    {
+        if (sharedContext)
+        {
+            // Increment the resources counter
+            resourceCount++;
 
-    // Create the shared context
-    sharedContext = new ContextType(NULL);
-    sharedContext->initialize(ContextSettings());
+            return;
+        }
 
-    // This call makes sure that:
-    // - the shared context is inactive (it must never be)
-    // - another valid context is activated in the current thread
-    sharedContext->setActive(false);
+        // Create the shared context
+        sharedContext = new ContextType(NULL);
+        sharedContext->initialize(ContextSettings());
+
+        // Load our extensions vector
+        extensions.clear();
+
+        // Check whether a >= 3.0 context is available
+        int majorVersion = 0;
+        glGetIntegerv(GL_MAJOR_VERSION, &majorVersion);
+
+        if (glGetError() == GL_INVALID_ENUM)
+        {
+            // Try to load the < 3.0 way
+            const char* extensionString = reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
+
+            do
+            {
+                const char* extension = extensionString;
+
+                while(*extensionString && (*extensionString != ' '))
+                    extensionString++;
+
+                extensions.push_back(std::string(extension, extensionString));
+            }
+            while (*extensionString++);
+        }
+        else
+        {
+            // Try to load the >= 3.0 way
+            glGetStringiFuncType glGetStringiFunc = NULL;
+            glGetStringiFunc = reinterpret_cast<glGetStringiFuncType>(getFunction("glGetStringi"));
+
+            if (glGetStringiFunc)
+            {
+                int numExtensions = 0;
+                glGetIntegerv(GL_NUM_EXTENSIONS, &numExtensions);
+
+                if (numExtensions)
+                {
+                    for (unsigned int i = 0; i < static_cast<unsigned int>(numExtensions); ++i)
+                    {
+                        const char* extensionString = reinterpret_cast<const char*>(glGetStringiFunc(GL_EXTENSIONS, i));
+
+                        extensions.push_back(extensionString);
+                    }
+                }
+            }
+        }
+
+        // Deactivate the shared context so that others can activate it when necessary
+        sharedContext->setActive(false);
+    }
+
+    // Increment the resources counter
+    resourceCount++;
 }
 
 
 ////////////////////////////////////////////////////////////
-void GlContext::globalCleanup()
+void GlContext::cleanupResource()
 {
+    // Protect from concurrent access
     Lock lock(mutex);
 
-    if (!sharedContext)
-        return;
+    // Decrement the resources counter
+    resourceCount--;
 
-    // Destroy the shared context
-    delete sharedContext;
-    sharedContext = NULL;
+    // If there's no more resource alive, we can trigger the global context cleanup
+    if (resourceCount == 0)
+    {
+        if (!sharedContext)
+            return;
 
-    // Destroy the internal contexts
-    Lock internalContextsLock(internalContextsMutex);
-    for (std::set<Context*>::iterator it = internalContexts.begin(); it != internalContexts.end(); ++it)
-        delete *it;
-    internalContexts.clear();
+        // Destroy the shared context
+        delete sharedContext;
+        sharedContext = NULL;
+    }
 }
 
 
 ////////////////////////////////////////////////////////////
-void GlContext::ensureContext()
+void GlContext::acquireTransientContext()
 {
-    // If there's no active context on the current thread, activate an internal one
-    if (!currentContext)
-        getInternalContext()->setActive(true);
+    // Protect from concurrent access
+    Lock lock(mutex);
+
+    // If this is the first TransientContextLock on this thread
+    // construct the state object
+    if (!transientContext)
+        transientContext = new TransientContext;
+
+    // Increase the reference count
+    transientContext->referenceCount++;
+}
+
+
+////////////////////////////////////////////////////////////
+void GlContext::releaseTransientContext()
+{
+    // Protect from concurrent access
+    Lock lock(mutex);
+
+    // Make sure a matching acquireTransientContext() was called
+    assert(transientContext);
+
+    // Decrease the reference count
+    transientContext->referenceCount--;
+
+    // If this is the last TransientContextLock that is released
+    // destroy the state object
+    if (transientContext->referenceCount == 0)
+    {
+        delete transientContext;
+        transientContext = NULL;
+    }
 }
 
 
 ////////////////////////////////////////////////////////////
 GlContext* GlContext::create()
 {
+    // Make sure that there's an active context (context creation may need extensions, and thus a valid context)
+    assert(sharedContext != NULL);
+
     Lock lock(mutex);
 
-    // Create the context
-    GlContext* context = new ContextType(sharedContext);
+    GlContext* context = NULL;
+
+    // We don't use acquireTransientContext here since we have
+    // to ensure we have exclusive access to the shared context
+    // in order to make sure it is not active during context creation
+    {
+        sharedContext->setActive(true);
+
+        // Create the context
+        context = new ContextType(sharedContext);
+
+        sharedContext->setActive(false);
+    }
+
     context->initialize(ContextSettings());
 
     return context;
@@ -235,12 +374,24 @@ GlContext* GlContext::create()
 GlContext* GlContext::create(const ContextSettings& settings, const WindowImpl* owner, unsigned int bitsPerPixel)
 {
     // Make sure that there's an active context (context creation may need extensions, and thus a valid context)
-    ensureContext();
+    assert(sharedContext != NULL);
 
     Lock lock(mutex);
 
-    // Create the context
-    GlContext* context = new ContextType(sharedContext, settings, owner, bitsPerPixel);
+    GlContext* context = NULL;
+
+    // We don't use acquireTransientContext here since we have
+    // to ensure we have exclusive access to the shared context
+    // in order to make sure it is not active during context creation
+    {
+        sharedContext->setActive(true);
+
+        // Create the context
+        context = new ContextType(sharedContext, settings, owner, bitsPerPixel);
+
+        sharedContext->setActive(false);
+    }
+
     context->initialize(settings);
     context->checkSettings(settings);
 
@@ -252,16 +403,35 @@ GlContext* GlContext::create(const ContextSettings& settings, const WindowImpl* 
 GlContext* GlContext::create(const ContextSettings& settings, unsigned int width, unsigned int height)
 {
     // Make sure that there's an active context (context creation may need extensions, and thus a valid context)
-    ensureContext();
+    assert(sharedContext != NULL);
 
     Lock lock(mutex);
 
-    // Create the context
-    GlContext* context = new ContextType(sharedContext, settings, width, height);
+    GlContext* context = NULL;
+
+    // We don't use acquireTransientContext here since we have
+    // to ensure we have exclusive access to the shared context
+    // in order to make sure it is not active during context creation
+    {
+        sharedContext->setActive(true);
+
+        // Create the context
+        context = new ContextType(sharedContext, settings, width, height);
+
+        sharedContext->setActive(false);
+    }
+
     context->initialize(settings);
     context->checkSettings(settings);
 
     return context;
+}
+
+
+////////////////////////////////////////////////////////////
+bool GlContext::isExtensionAvailable(const char* name)
+{
+    return std::find(extensions.begin(), extensions.end(), name) != extensions.end();
 }
 
 
@@ -287,7 +457,10 @@ GlContext::~GlContext()
 {
     // Deactivate the context before killing it, unless we're inside Cleanup()
     if (sharedContext)
-        setActive(false);
+    {
+        if (this == currentContext)
+            currentContext = NULL;
+    }
 }
 
 
@@ -308,7 +481,7 @@ bool GlContext::setActive(bool active)
             Lock lock(mutex);
 
             // Activate the context
-            if (makeCurrent())
+            if (makeCurrent(true))
             {
                 // Set it as the new current context for this thread
                 currentContext = this;
@@ -329,9 +502,18 @@ bool GlContext::setActive(bool active)
     {
         if (this == currentContext)
         {
-            // To deactivate the context, we actually activate another one so that we make
-            // sure that there is always an active context for subsequent graphics operations
-            return getInternalContext()->setActive(true);
+            Lock lock(mutex);
+
+            // Deactivate the context
+            if (makeCurrent(false))
+            {
+                currentContext = NULL;
+                return true;
+            }
+            else
+            {
+                return false;
+            }
         }
         else
         {

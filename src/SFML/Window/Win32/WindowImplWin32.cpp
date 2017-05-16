@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2015 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2017 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -55,10 +55,15 @@
     #define MAPVK_VK_TO_VSC (0)
 #endif
 
+// Avoid including <Dbt.h> just for one define
+#ifndef DBT_DEVNODES_CHANGED
+    #define DBT_DEVNODES_CHANGED 0x0007
+#endif
 
 namespace
 {
-    unsigned int               windowCount      = 0;
+    unsigned int               windowCount      = 0; // Windows owned by SFML
+    unsigned int               handleCount      = 0; // All window handles
     const wchar_t*             className        = L"SFML_Window";
     sf::priv::WindowImplWin32* fullscreenWindow = NULL;
 
@@ -132,13 +137,21 @@ m_keyRepeatEnabled(true),
 m_lastSize        (0, 0),
 m_resizing        (false),
 m_surrogate       (0),
-m_mouseInside     (false)
+m_mouseInside     (false),
+m_fullscreen      (false),
+m_cursorGrabbed   (false)
 {
     // Set that this process is DPI aware and can handle DPI scaling
     setProcessDpiAware();
 
     if (m_handle)
     {
+        // If we're the first window handle, we only need to poll for joysticks when WM_DEVICECHANGE message is received
+        if (handleCount == 0)
+            JoystickImpl::setLazyUpdates(true);
+
+        ++handleCount;
+
         // We change the event procedure of the control (it is important to save the old one)
         SetWindowLongPtrW(m_handle, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
         m_callback = SetWindowLongPtrW(m_handle, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&WindowImplWin32::globalOnEvent));
@@ -156,7 +169,9 @@ m_keyRepeatEnabled(true),
 m_lastSize        (mode.width, mode.height),
 m_resizing        (false),
 m_surrogate       (0),
-m_mouseInside     (false)
+m_mouseInside     (false),
+m_fullscreen      (style & Style::Fullscreen),
+m_cursorGrabbed   (m_fullscreen)
 {
     // Set that this process is DPI aware and can handle DPI scaling
     setProcessDpiAware();
@@ -187,8 +202,7 @@ m_mouseInside     (false)
     }
 
     // In windowed mode, adjust width and height so that window will have the requested client area
-    bool fullscreen = (style & Style::Fullscreen) != 0;
-    if (!fullscreen)
+    if (!m_fullscreen)
     {
         RECT rectangle = {0, 0, width, height};
         AdjustWindowRect(&rectangle, win32Style, false);
@@ -199,12 +213,21 @@ m_mouseInside     (false)
     // Create the window
     m_handle = CreateWindowW(className, title.toWideString().c_str(), win32Style, left, top, width, height, NULL, NULL, GetModuleHandle(NULL), this);
 
+    // If we're the first window handle, we only need to poll for joysticks when WM_DEVICECHANGE message is received
+    if (m_handle)
+    {
+        if (handleCount == 0)
+            JoystickImpl::setLazyUpdates(true);
+
+        ++handleCount;
+    }
+    
     // By default, the OS limits the size of the window the the desktop size,
     // we have to resize it after creation to apply the real size
     setSize(Vector2u(mode.width, mode.height));
 
     // Switch to fullscreen if requested
-    if (fullscreen)
+    if (m_fullscreen)
         switchToFullscreen(mode);
 
     // Increment window count
@@ -218,6 +241,15 @@ WindowImplWin32::~WindowImplWin32()
     // Destroy the custom icon, if any
     if (m_icon)
         DestroyIcon(m_icon);
+
+    // If it's the last window handle we have to poll for joysticks again
+    if (m_handle)
+    {
+        --handleCount;
+
+        if (handleCount == 0)
+            JoystickImpl::setLazyUpdates(false);
+    }
 
     if (!m_callback)
     {
@@ -277,6 +309,9 @@ Vector2i WindowImplWin32::getPosition() const
 void WindowImplWin32::setPosition(const Vector2i& position)
 {
     SetWindowPos(m_handle, NULL, position.x, position.y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+
+    if(m_cursorGrabbed)
+        grabCursor(true);
 }
 
 
@@ -360,6 +395,14 @@ void WindowImplWin32::setMouseCursorVisible(bool visible)
         m_cursor = NULL;
 
     SetCursor(m_cursor);
+}
+
+
+////////////////////////////////////////////////////////////
+void WindowImplWin32::setMouseCursorGrabbed(bool grabbed)
+{
+    m_cursorGrabbed = grabbed;
+    grabCursor(m_cursorGrabbed);
 }
 
 
@@ -486,6 +529,23 @@ void WindowImplWin32::setTracking(bool track)
 
 
 ////////////////////////////////////////////////////////////
+void WindowImplWin32::grabCursor(bool grabbed)
+{
+    if (grabbed)
+    {
+        RECT rect;
+        GetClientRect(m_handle, &rect);
+        MapWindowPoints(m_handle, NULL, reinterpret_cast<LPPOINT>(&rect), 2);
+        ClipCursor(&rect);
+    }
+    else
+    {
+        ClipCursor(NULL);
+    }
+}
+
+
+////////////////////////////////////////////////////////////
 void WindowImplWin32::processEvent(UINT message, WPARAM wParam, LPARAM lParam)
 {
     // Don't process any message until window is created
@@ -536,6 +596,9 @@ void WindowImplWin32::processEvent(UINT message, WPARAM wParam, LPARAM lParam)
                 event.size.width  = m_lastSize.x;
                 event.size.height = m_lastSize.y;
                 pushEvent(event);
+
+                // Restore/update cursor grabbing
+                grabCursor(m_cursorGrabbed);
             }
             break;
         }
@@ -544,6 +607,7 @@ void WindowImplWin32::processEvent(UINT message, WPARAM wParam, LPARAM lParam)
         case WM_ENTERSIZEMOVE:
         {
             m_resizing = true;
+            grabCursor(false);
             break;
         }
 
@@ -565,6 +629,9 @@ void WindowImplWin32::processEvent(UINT message, WPARAM wParam, LPARAM lParam)
                 event.size.height = m_lastSize.y;
                 pushEvent(event);
             }
+
+            // Restore/update cursor grabbing
+            grabCursor(m_cursorGrabbed);
             break;
         }
 
@@ -582,6 +649,9 @@ void WindowImplWin32::processEvent(UINT message, WPARAM wParam, LPARAM lParam)
         // Gain focus event
         case WM_SETFOCUS:
         {
+            // Restore cursor grabbing
+            grabCursor(m_cursorGrabbed);
+
             Event event;
             event.type = Event::GainedFocus;
             pushEvent(event);
@@ -591,6 +661,9 @@ void WindowImplWin32::processEvent(UINT message, WPARAM wParam, LPARAM lParam)
         // Lost focus event
         case WM_KILLFOCUS:
         {
+            // Ungrab the cursor
+            grabCursor(false);
+
             Event event;
             event.type = Event::LostFocus;
             pushEvent(event);
@@ -890,6 +963,13 @@ void WindowImplWin32::processEvent(UINT message, WPARAM wParam, LPARAM lParam)
             event.mouseMove.x = x;
             event.mouseMove.y = y;
             pushEvent(event);
+            break;
+        }
+        case WM_DEVICECHANGE:
+        {
+            // Some sort of device change has happened, update joystick connections
+            if (wParam == DBT_DEVNODES_CHANGED)
+                JoystickImpl::updateConnections();
             break;
         }
     }

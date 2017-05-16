@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2015 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2017 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -98,7 +98,7 @@ RenderTarget::~RenderTarget()
 ////////////////////////////////////////////////////////////
 void RenderTarget::clear(const Color& color)
 {
-    if (activate(true))
+    if (setActive(true))
     {
         // Unbind texture to fix RenderTexture preventing clear
         applyTexture(NULL);
@@ -214,7 +214,7 @@ void RenderTarget::draw(const Vertex* vertices, std::size_t vertexCount,
         #define GL_QUADS 0
     #endif
 
-    if (activate(true))
+    if (setActive(true))
     {
         // First set the persistent OpenGL states if it's the very first call
         if (!m_cache.glStatesSet)
@@ -269,13 +269,25 @@ void RenderTarget::draw(const Vertex* vertices, std::size_t vertexCount,
                 vertices = NULL;
         }
 
+        // Check if texture coordinates array is needed, and update client state accordingly
+        bool enableTexCoordsArray = (states.texture || states.shader);
+        if (enableTexCoordsArray != m_cache.texCoordsArrayEnabled)
+        {
+            if (enableTexCoordsArray)
+                glCheck(glEnableClientState(GL_TEXTURE_COORD_ARRAY));
+            else
+                glCheck(glDisableClientState(GL_TEXTURE_COORD_ARRAY));
+            m_cache.texCoordsArrayEnabled = enableTexCoordsArray;
+        }
+
         // Setup the pointers to the vertices' components
         if (vertices)
         {
             const char* data = reinterpret_cast<const char*>(vertices);
             glCheck(glVertexPointer(2, GL_FLOAT, sizeof(Vertex), data + 0));
             glCheck(glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(Vertex), data + 8));
-            glCheck(glTexCoordPointer(2, GL_FLOAT, sizeof(Vertex), data + 12));
+            if (enableTexCoordsArray)
+                glCheck(glTexCoordPointer(2, GL_FLOAT, sizeof(Vertex), data + 12));
         }
 
         // Find the OpenGL primitive type
@@ -304,7 +316,7 @@ void RenderTarget::draw(const Vertex* vertices, std::size_t vertexCount,
 ////////////////////////////////////////////////////////////
 void RenderTarget::pushGLStates()
 {
-    if (activate(true))
+    if (setActive(true))
     {
         #ifdef SFML_DEBUG
             // make sure that the user didn't leave an unchecked OpenGL error
@@ -336,7 +348,7 @@ void RenderTarget::pushGLStates()
 ////////////////////////////////////////////////////////////
 void RenderTarget::popGLStates()
 {
-    if (activate(true))
+    if (setActive(true))
     {
         glCheck(glMatrixMode(GL_PROJECTION));
         glCheck(glPopMatrix());
@@ -358,7 +370,7 @@ void RenderTarget::resetGLStates()
     // Check here to make sure a context change does not happen after activate(true)
     bool shaderAvailable = Shader::isAvailable();
 
-    if (activate(true))
+    if (setActive(true))
     {
         // Make sure that extensions are initialized
         priv::ensureExtensionsInit();
@@ -389,6 +401,8 @@ void RenderTarget::resetGLStates()
         applyTexture(NULL);
         if (shaderAvailable)
             applyShader(NULL);
+
+        m_cache.texCoordsArrayEnabled = true;
 
         m_cache.useVertexCache = false;
 

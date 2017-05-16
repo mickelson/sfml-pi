@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2015 Marco Antognini (antognini.marco@gmail.com),
+// Copyright (C) 2007-2017 Marco Antognini (antognini.marco@gmail.com),
 //                         Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
@@ -483,6 +483,13 @@ void WindowImplCocoa::setMouseCursorVisible(bool visible)
         else
             hideMouseCursor();
     }
+}
+
+
+////////////////////////////////////////////////////////////
+void WindowImplCocoa::setMouseCursorGrabbed(bool grabbed)
+{
+    [m_delegate setCursorGrabbed:grabbed];
 }
 
 

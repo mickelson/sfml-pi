@@ -204,5 +204,10 @@ void WindowImplRPi::processEvents()
         pushEvent( ev );
 }
 
+void WindowImplRPi::setMouseCursorGrabbed(bool grabbed)
+{
+    //TODO: not implemented
+}
+
 } // namespace priv
 } // namespace sf

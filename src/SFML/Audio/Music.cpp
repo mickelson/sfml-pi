@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2015 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2017 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -36,8 +36,7 @@ namespace sf
 {
 ////////////////////////////////////////////////////////////
 Music::Music() :
-m_file    (),
-m_duration()
+m_file    ()
 {
 
 }
@@ -105,7 +104,7 @@ bool Music::openFromStream(InputStream& stream)
 ////////////////////////////////////////////////////////////
 Time Music::getDuration() const
 {
-    return m_duration;
+    return m_file.getDuration();
 }
 
 
@@ -118,8 +117,8 @@ bool Music::onGetData(SoundStream::Chunk& data)
     data.samples     = &m_samples[0];
     data.sampleCount = static_cast<std::size_t>(m_file.read(&m_samples[0], m_samples.size()));
 
-    // Check if we have reached the end of the audio file
-    return data.sampleCount == m_samples.size();
+    // Check if we have stopped obtaining samples or reached the end of the audio file
+    return (data.sampleCount != 0) && (m_file.getSampleOffset() < m_file.getSampleCount());
 }
 
 
@@ -135,9 +134,6 @@ void Music::onSeek(Time timeOffset)
 ////////////////////////////////////////////////////////////
 void Music::initialize()
 {
-    // Compute the music duration
-    m_duration = m_file.getDuration();
-
     // Resize the internal buffer so that it can contain 1 second of audio samples
     m_samples.resize(m_file.getSampleRate() * m_file.getChannelCount());
 

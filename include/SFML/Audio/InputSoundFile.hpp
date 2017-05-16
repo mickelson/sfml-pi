@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2015 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2017 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -32,6 +32,7 @@
 #include <SFML/System/NonCopyable.hpp>
 #include <SFML/System/Time.hpp>
 #include <string>
+#include <algorithm>
 
 
 namespace sf
@@ -147,6 +148,22 @@ public:
     Time getDuration() const;
 
     ////////////////////////////////////////////////////////////
+    /// \brief Get the read offset of the file in time
+    ///
+    /// \return Time position
+    ///
+    ////////////////////////////////////////////////////////////
+    Time getTimeOffset() const;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Get the read offset of the file in samples
+    ///
+    /// \return Sample position
+    ///
+    ////////////////////////////////////////////////////////////
+    Uint64 getSampleOffset() const;
+
+    ////////////////////////////////////////////////////////////
     /// \brief Change the current read position to the given sample offset
     ///
     /// This function takes a sample offset to provide maximum
@@ -203,6 +220,7 @@ private:
     SoundFileReader* m_reader;       ///< Reader that handles I/O on the file's format
     InputStream*     m_stream;       ///< Input stream used to access the file's data
     bool             m_streamOwned;  ///< Is the stream internal or external?
+    Uint64           m_sampleOffset; ///< Sample Read Position
     Uint64           m_sampleCount;  ///< Total number of samples in the file
     unsigned int     m_channelCount; ///< Number of channels of the sound
     unsigned int     m_sampleRate;   ///< Number of samples per second

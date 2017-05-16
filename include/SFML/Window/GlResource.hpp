@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2015 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2017 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -29,10 +29,14 @@
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Window/Export.hpp>
+#include <SFML/System/NonCopyable.hpp>
 
 
 namespace sf
 {
+
+class Context;
+
 ////////////////////////////////////////////////////////////
 /// \brief Base class for classes that require an OpenGL context
 ///
@@ -54,10 +58,24 @@ protected:
     ~GlResource();
 
     ////////////////////////////////////////////////////////////
-    /// \brief Make sure that a valid OpenGL context exists in the current thread
+    /// \brief RAII helper class to temporarily lock an available context for use
     ///
     ////////////////////////////////////////////////////////////
-    static void ensureGlContext();
+    class SFML_WINDOW_API TransientContextLock : NonCopyable
+    {
+    public:
+        ////////////////////////////////////////////////////////////
+        /// \brief Default constructor
+        ///
+        ////////////////////////////////////////////////////////////
+        TransientContextLock();
+
+        ////////////////////////////////////////////////////////////
+        /// \brief Destructor
+        ///
+        ////////////////////////////////////////////////////////////
+        ~TransientContextLock();
+    };
 };
 
 } // namespace sf

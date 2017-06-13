@@ -384,9 +384,9 @@ namespace
         fd_set rdfs;
         FD_ZERO( &rdfs );
         FD_SET( STDIN_FILENO, &rdfs );
-        select( STDIN_FILENO+1, &rdfs, NULL, NULL, &tv );
+        int sel = select( STDIN_FILENO+1, &rdfs, NULL, NULL, &tv );
 
-        if ( FD_ISSET( STDIN_FILENO, &rdfs ) )
+        if ( sel > 0 && FD_ISSET( STDIN_FILENO, &rdfs ) )
             read( STDIN_FILENO, &c, 1 );
 
         if (( c == 127 ) || ( c == 8 ))  // Suppress 127 (DEL) to 8 (BACKSPACE)
@@ -397,8 +397,8 @@ namespace
             //
             FD_ZERO( &rdfs );
             FD_SET( STDIN_FILENO, &rdfs );
-            select( STDIN_FILENO+1, &rdfs, NULL, NULL, &tv );
-            if ( FD_ISSET( STDIN_FILENO, &rdfs ) )
+            sel = select( STDIN_FILENO+1, &rdfs, NULL, NULL, &tv );
+            if ( sel > 0 && FD_ISSET( STDIN_FILENO, &rdfs ) )
             {
                 unsigned char buff[16];
                 int rd = read( STDIN_FILENO, buff, 16 );

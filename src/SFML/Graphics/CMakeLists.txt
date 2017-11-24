@@ -120,7 +120,11 @@ if(SFML_OPENGL_ES AND SFML_OS_LINUX)
     if(SFML_RPI)
         # Workaround: we need to use gles2 on the rpi version
         get_filename_component(GLES2PATH ${GLES_LIBRARY} PATH)
-        find_library(GLES2_LIBRARY GLESv2 ${GLES2PATH})
+        find_library(GLES2_LIBRARY brcmGLESv2 ${GLES2PATH})
+        # fallback to old vendor library name
+        if(${GLES2_LIBRARY} STREQUAL "GLES2_LIBRARY-NOTFOUND")
+            find_library(GLES2_LIBRARY GLESv2 ${GLES2PATH})
+        endif()
     endif()
 endif()
 if(SFML_OS_ANDROID)

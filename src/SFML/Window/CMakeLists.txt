@@ -256,6 +256,13 @@ if(SFML_OS_LINUX)
         include_directories(${DRM_INCLUDE_DIR})
     endif()
 endif()
+if(SFML_OS_WINDOWS AND NOT SFML_COMPILER_MSVC)
+    include(CheckIncludeFile)
+    check_include_file(dinput.h DINPUT_H_FOUND)
+    if(NOT DINPUT_H_FOUND)
+        include_directories("${PROJECT_SOURCE_DIR}/extlibs/headers/mingw")
+    endif()
+endif()
 
 
 # build the list of external libraries to link

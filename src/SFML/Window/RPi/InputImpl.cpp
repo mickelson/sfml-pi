@@ -52,12 +52,30 @@
 
 namespace
 {
+    struct TouchSlot {
+        int oldId;
+        int id;
+        sf::Vector2i pos;
+
+        TouchSlot ()
+        {
+            oldId = -1;
+            id = -1;
+            pos.x = 0;
+            pos.y = 0;
+        }
+    };
+
     sf::Mutex         inpMutex;                                // threadsafe? maybe...
     sf::Vector2i      mousePos;                                // current mouse position
 
     std::vector<int>  fds;                                     // list of open file descriptors for /dev/input
     std::vector<bool> mouseMap(sf::Mouse::ButtonCount, false); // track whether keys are down
     std::vector<bool> keyMap(sf::Keyboard::KeyCount, false);   // track whether mouse buttons are down
+
+    int touchFd = -1;                                          // file descriptor we have seen MT events on; assumes only 1
+    std::vector<TouchSlot> touchSlots;                         // track the state of each touch "slot"
+    int currentSlot = 0;                                       // which slot are we currently updating?
 
     std::queue<sf::Event> eventQueue;                          // events received and waiting to be consumed
     const int MAX_QUEUE = 64;                                  // The maximum size we let eventQueue grow to
@@ -237,6 +255,56 @@ namespace
         }
     }
 
+    void pushEvent( sf::Event& ev )
+    {
+        if ( eventQueue.size() >= MAX_QUEUE )
+            eventQueue.pop();
+
+        eventQueue.push( ev );
+    }
+
+    TouchSlot& atSlot( int idx )
+    {
+        if ( idx >= touchSlots.size() )
+            touchSlots.resize(idx + 1);
+        return touchSlots.at( idx );
+    }
+
+    void processSlots()
+    {
+        for ( std::vector<TouchSlot>::iterator slot=touchSlots.begin(); slot != touchSlots.end(); ++slot )
+        {
+            sf::Event ev;
+
+            ev.touch.x = slot->pos.x;
+            ev.touch.y = slot->pos.y;
+
+            if ( slot->oldId == slot->id )
+            {
+                ev.type = sf::Event::TouchMoved;
+                ev.touch.finger = slot->id;
+                pushEvent( ev );
+            }
+            else
+            {
+                if ( slot->oldId != -1 )
+                {
+                    ev.type = sf::Event::TouchEnded;
+                    ev.touch.finger = slot->oldId;
+                    pushEvent( ev );
+                }
+                if ( slot->id != -1 )
+                {
+                    ev.type = sf::Event::TouchBegan;
+                    ev.touch.finger = slot->id;
+                    pushEvent( ev );
+                }
+
+                slot->oldId = slot->id;
+            }
+        }
+    }
+
     bool eventProcess( sf::Event &ev )
     {
         sf::Lock lock( inpMutex );
@@ -358,6 +426,35 @@ namespace
                         return true;
                     }
                 }
+                else if ( ie.type == EV_ABS )
+                {
+                    switch ( ie.code )
+                    {
+                    case ABS_MT_SLOT:
+                        currentSlot = ie.value;
+                        touchFd = *itr;
+                        break;
+                    case ABS_MT_TRACKING_ID:
+                        atSlot(currentSlot).id = ie.value;
+                        touchFd = *itr;
+                        break;
+                    case ABS_MT_POSITION_X:
+                        atSlot(currentSlot).pos.x = ie.value;
+                        touchFd = *itr;
+                        break;
+                    case ABS_MT_POSITION_Y:
+                        atSlot(currentSlot).pos.y = ie.value;
+                        touchFd = *itr;
+                        break;
+                    }
+                }
+                else if ( ie.type == EV_SYN && ie.code == SYN_REPORT &&
+                          *itr == touchFd)
+                {
+                    // This pushes events directly to the queue, because it
+                    // can generate more than one event.
+                    processSlots();
+                }
 
                 rd = read( *itr, &ie, sizeof( ie ) );
             }
@@ -427,10 +524,7 @@ namespace
         sf::Event ev;
         while ( eventProcess( ev ) )
         {
-            if ( eventQueue.size() >= MAX_QUEUE )
-                eventQueue.pop();
-
-            eventQueue.push( ev );
+            pushEvent( ev );
         }
     }
 };
@@ -501,26 +595,35 @@ void InputImpl::setMousePosition(const Vector2i& position, const Window& relativ
 
 
 ////////////////////////////////////////////////////////////
-bool InputImpl::isTouchDown(unsigned int /*finger*/)
+bool InputImpl::isTouchDown(unsigned int finger)
 {
-    // Not applicable
+    for ( std::vector<TouchSlot>::iterator slot=touchSlots.begin(); slot != touchSlots.end(); ++slot )
+    {
+        if ( slot->id == finger )
+            return true;
+    }
+
     return false;
 }
 
 
 ////////////////////////////////////////////////////////////
-Vector2i InputImpl::getTouchPosition(unsigned int /*finger*/)
+Vector2i InputImpl::getTouchPosition(unsigned int finger)
 {
-    // Not applicable
+    for ( std::vector<TouchSlot>::iterator slot=touchSlots.begin(); slot != touchSlots.end(); ++slot )
+    {
+        if ( slot->id == finger )
+            return slot->pos;
+    }
+
     return Vector2i();
 }
 
 
 ////////////////////////////////////////////////////////////
-Vector2i InputImpl::getTouchPosition(unsigned int /*finger*/, const Window& /*relativeTo*/)
+Vector2i InputImpl::getTouchPosition(unsigned int finger, const Window& /*relativeTo*/)
 {
-    // Not applicable
-    return Vector2i();
+    return getTouchPosition( finger );
 }
 
 ////////////////////////////////////////////////////////////
@@ -535,7 +638,25 @@ bool InputImpl::checkEvent( sf::Event &ev )
         return true;
     }
 
-    return eventProcess( ev );
+    if ( eventProcess( ev ) )
+    {
+        return true;
+    }
+    else
+    {
+        // In the case of multitouch, eventProcess() could have returned false
+        // but added events directly to the queue.  (This is ugly, but I'm not
+        // sure of a good way to handle generating multiple events at once.)
+        if ( !eventQueue.empty() )
+        {
+            ev = eventQueue.front();
+            eventQueue.pop();
+
+            return true;
+        }
+    }
+
+    return false;
 }
 
 } // namespace priv

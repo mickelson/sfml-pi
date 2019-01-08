@@ -503,10 +503,12 @@ elseif(SFML_OS_IOS)
         install(DIRECTORY "${CMAKE_BINARY_DIR}/lib/\$ENV{CONFIGURATION}/" DESTINATION lib${LIB_SUFFIX})
     endif()
 
-    # since the iOS libraries are built as static, we must install the SFML dependencies
-    # too so that the end user can easily link them to its final application
-    if(SFML_BUILD_GRAPHICS)
-        install(FILES extlibs/libs-ios/libfreetype.a extlibs/libs-ios/libjpeg.a DESTINATION lib)
+    if(NOT SFML_USE_SYSTEM_DEPS)
+        # since the iOS libraries are built as static, we must install the SFML dependencies
+        # too so that the end user can easily link them to its final application
+        if(SFML_BUILD_GRAPHICS)
+            install(FILES extlibs/libs-ios/libfreetype.a DESTINATION lib)
+        endif()
     endif()
 
 elseif(SFML_OS_ANDROID)

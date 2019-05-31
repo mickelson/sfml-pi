@@ -120,7 +120,7 @@
     #define GLEXT_glBlendEquationSeparate             glBlendEquationSeparateOES
 
     // Core since 2.0 - OES_texture_npot
-    #define GLEXT_texture_non_power_of_two            false
+    #define GLEXT_texture_non_power_of_two            true
 
     // Core since 2.0 - OES_framebuffer_object
     #define GLEXT_framebuffer_object                  GL_OES_framebuffer_object

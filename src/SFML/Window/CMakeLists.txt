@@ -40,7 +40,7 @@ set(SRC
     ${SRCROOT}/WindowImpl.hpp
     ${INCROOT}/WindowStyle.hpp
 )
-if(SFML_OPENGL_ES AND NOT SFML_OS_IOS)
+if(SFML_OPENGL_ES AND NOT (SFML_OS_IOS OR SFML_DRM))
     list(APPEND SRC ${SRCROOT}/EGLCheck.cpp)
     list(APPEND SRC ${SRCROOT}/EGLCheck.hpp)
     list(APPEND SRC ${SRCROOT}/EglContext.cpp)
@@ -70,7 +70,33 @@ if(SFML_OS_WINDOWS)
     # make sure that we use the Unicode version of the Win API functions
     add_definitions(-DUNICODE -D_UNICODE)
 elseif(SFML_OS_LINUX OR SFML_OS_FREEBSD)
-    if(NOT SFML_RPI)
+    if(SFML_RPI)
+        set(PLATFORM_SRC
+            ${SRCROOT}/Unix/DRM/InputImplUDev.cpp
+            ${SRCROOT}/Unix/DRM/InputImplUDev.hpp
+            ${SRCROOT}/Unix/SensorImpl.cpp
+            ${SRCROOT}/Unix/SensorImpl.hpp
+            ${SRCROOT}/Unix/RPi/VideoModeImplRPi.cpp
+            ${SRCROOT}/Unix/RPi/WindowImplRPi.cpp
+            ${SRCROOT}/Unix/RPi/WindowImplRPi.hpp
+        )
+    elseif(SFML_DRM)
+        set(PLATFORM_SRC
+            ${SRCROOT}/Unix/DRM/DRMContext.cpp
+            ${SRCROOT}/Unix/DRM/DRMContext.hpp
+            ${SRCROOT}/Unix/DRM/InputImplUDev.cpp
+            ${SRCROOT}/Unix/DRM/InputImplUDev.hpp
+            ${SRCROOT}/Unix/SensorImpl.cpp
+            ${SRCROOT}/Unix/SensorImpl.hpp
+            ${SRCROOT}/Unix/DRM/VideoModeImplDRM.cpp
+            ${SRCROOT}/Unix/DRM/WindowImplDRM.cpp
+            ${SRCROOT}/Unix/DRM/WindowImplDRM.hpp
+            ${SRCROOT}/Unix/DRM/drm-common.c
+            ${SRCROOT}/Unix/DRM/drm-common.h
+            ${SRCROOT}/EGLCheck.cpp
+            ${SRCROOT}/EGLCheck.hpp
+        )
+    else()
         set(PLATFORM_SRC
             ${SRCROOT}/Unix/Display.cpp
             ${SRCROOT}/Unix/Display.hpp
@@ -82,19 +108,8 @@ elseif(SFML_OS_LINUX OR SFML_OS_FREEBSD)
             ${SRCROOT}/Unix/WindowImplX11.cpp
             ${SRCROOT}/Unix/WindowImplX11.hpp
         )
-    else()
-        set(PLATFORM_SRC
-            ${PLATFORM_SRC}
-            ${SRCROOT}/RPi/InputImpl.cpp
-            ${SRCROOT}/RPi/InputImpl.hpp
-            ${SRCROOT}/Unix/SensorImpl.cpp
-            ${SRCROOT}/Unix/SensorImpl.hpp
-            ${SRCROOT}/RPi/VideoModeImpl.cpp
-            ${SRCROOT}/RPi/WindowImplRPi.cpp
-            ${SRCROOT}/RPi/WindowImplRPi.hpp
-        )
     endif()
-    if(NOT SFML_OPENGL_ES)
+    if(NOT SFML_OPENGL_ES AND NOT SFML_DRM)
         set(PLATFORM_SRC
             ${PLATFORM_SRC}
             ${SRCROOT}/Unix/GlxContext.cpp
@@ -206,7 +221,7 @@ elseif(SFML_OS_ANDROID)
 endif()
 
 # find external libraries
-if((SFML_OS_LINUX OR SFML_OS_FREEBSD) AND NOT SFML_RPI)
+if((SFML_OS_LINUX OR SFML_OS_FREEBSD) AND NOT (SFML_RPI OR SFML_DRM))
     find_package(X11 REQUIRED)
     if(NOT X11_FOUND)
         message(FATAL_ERROR "X11 library not found")
@@ -231,6 +246,15 @@ if(SFML_OS_LINUX)
         message(FATAL_ERROR "udev library not found")
     endif()
     include_directories(${UDEV_INCLUDE_DIR})
+    if (SFML_DRM)
+        find_package(EGL REQUIRED)
+        find_package(DRM REQUIRED)
+        if(NOT DRM_FOUND)
+            message(FATAL_ERROR "drm library not found")
+        endif()
+        include_directories(${EGL_INCLUDE_DIR})
+        include_directories(${DRM_INCLUDE_DIR})
+    endif()
 endif()
 
 
@@ -238,10 +262,13 @@ endif()
 if(SFML_OS_WINDOWS)
     list(APPEND WINDOW_EXT_LIBS winmm gdi32)
 elseif(SFML_OS_LINUX)
-    if(NOT SFML_RPI)
+    if(SFML_RPI)
+        list(APPEND WINDOW_EXT_LIBS ${UDEV_LIBRARIES})
+    elseif(SFML_DRM)
+        list(APPEND WINDOW_EXT_LIBS ${DRM_LIBRARY} ${EGL_LIBRARY} ${UDEV_LIBRARIES})
+    else()
         list(APPEND WINDOW_EXT_LIBS ${X11_X11_LIB} ${X11_Xrandr_LIB} ${UDEV_LIBRARIES})
     endif()
-    list(APPEND WINDOW_EXT_LIBS ${UDEV_LIBRARIES})
 elseif(SFML_OS_FREEBSD)
     list(APPEND WINDOW_EXT_LIBS ${X11_X11_LIB} ${X11_Xrandr_LIB} usbhid)
 elseif(SFML_OS_MACOSX)

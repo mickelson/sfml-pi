@@ -33,8 +33,8 @@
 #if defined(SFML_SYSTEM_WINDOWS)
     #include <SFML/Window/Win32/InputImpl.hpp>
 #elif defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_FREEBSD)
-    #if defined(SFML_RPI)
-        #include <SFML/Window/RPi/InputImpl.hpp>
+    #if defined(SFML_RPI) || defined(SFML_DRM)
+        #include <SFML/Window/Unix/DRM/InputImplUDev.hpp>
     #else
         #include <SFML/Window/Unix/InputImpl.hpp>
     #endif

@@ -2,7 +2,7 @@
 //
 // SFML - Simple and Fast Multimedia Library
 //
-// Raspberry Pi dispmanx implementation
+// Linux UDEV keyboard input implementation
 // Copyright (C) 2016 Andrew Mickelson
 //
 // This software is provided 'as-is', without any express or implied warranty.

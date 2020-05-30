@@ -1,7 +1,9 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2017 Laurent Gomila (laurent@sfml-dev.org)
+//
+// Linux DRM implementation
+// Copyright (C) 2020 Andrew Mickelson
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -22,29 +24,34 @@
 //
 ////////////////////////////////////////////////////////////
 
-#ifndef SFML_INPUTIMPL_HPP
-#define SFML_INPUTIMPL_HPP
-
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/Config.hpp>
+#include <SFML/Window/VideoModeImpl.hpp>
+#include <SFML/Window/Unix/DRM/DRMContext.hpp>
+#include <SFML/Window/Unix/DRM/drm-common.h>
+#include <SFML/System/Err.hpp>
 
-#if defined(SFML_SYSTEM_WINDOWS)
-    #include <SFML/Window/Win32/InputImpl.hpp>
-#elif defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_FREEBSD)
-    #if defined(SFML_RPI) || defined(SFML_DRM)
-        #include <SFML/Window/Unix/DRM/InputImplUDev.hpp>
-    #else
-        #include <SFML/Window/Unix/InputImpl.hpp>
-    #endif
-#elif defined(SFML_SYSTEM_MACOS)
-    #include <SFML/Window/OSX/InputImpl.hpp>
-#elif defined(SFML_SYSTEM_IOS)
-    #include <SFML/Window/iOS/InputImpl.hpp>
-#elif defined(SFML_SYSTEM_ANDROID)
-    #include <SFML/Window/Android/InputImpl.hpp>
-#endif
+namespace sf
+{
+namespace priv
+{
+////////////////////////////////////////////////////////////
+std::vector<VideoMode> VideoModeImpl::getFullscreenModes()
+{
+    std::vector<VideoMode> modes;
+    modes.push_back(getDesktopMode());
+    return modes;
+}
 
 
-#endif // SFML_INPUTIMPL_HPP
+////////////////////////////////////////////////////////////
+VideoMode VideoModeImpl::getDesktopMode()
+{
+    struct drm *drm = sf::priv::DRMContext::get_drm();
+    return VideoMode( drm->mode->hdisplay, drm->mode->vdisplay );
+}
+
+} // namespace priv
+
+} // namespace sf

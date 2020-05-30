@@ -29,8 +29,8 @@
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Window/WindowStyle.hpp> // important to be included first (conflict with None)
-#include <SFML/Window/RPi/WindowImplRPi.hpp>
-#include <SFML/Window/RPi/InputImpl.hpp>
+#include <SFML/Window/Unix/RPi/WindowImplRPi.hpp>
+#include <SFML/Window/Unix/DRM/InputImplUDev.hpp>
 #include <SFML/Window/Event.hpp>
 #include <SFML/System/Err.hpp>
 
@@ -78,7 +78,7 @@ WindowImplRPi::WindowImplRPi(VideoMode mode, const String& title, unsigned long 
     dst_rect.y = 0;
     dst_rect.width = mode.width;
     dst_rect.height = mode.height;
-    
+
     src_rect.x = 0;
     src_rect.y = 0;
     src_rect.width = mode.width << 16;

@@ -108,7 +108,7 @@ endif()
 # find external libraries
 if(NOT SFML_OPENGL_ES)
     find_package(OpenGL REQUIRED)
-    if(SFML_OS_LINUX)
+    if(SFML_OS_LINUX AND NOT SFML_DRM)
         find_package(X11 REQUIRED)
     endif()
     include_directories(${FREETYPE_INCLUDE_DIRS} ${JPEG_INCLUDE_DIR} ${OPENGL_INCLUDE_DIR})
@@ -139,7 +139,7 @@ include_directories(${FREETYPE_INCLUDE_DIRS} ${JPEG_INCLUDE_DIR})
 # build the list of external libraries to link
 if(NOT SFML_OPENGL_ES)
     list(APPEND GRAPHICS_EXT_LIBS ${OPENGL_gl_LIBRARY})
-    if(SFML_OS_LINUX)
+    if(SFML_OS_LINUX AND NOT SFML_DRM)
         list(APPEND GRAPHICS_EXT_LIBS ${X11_LIBRARIES})
     endif()
 endif()
@@ -163,6 +163,9 @@ add_definitions(-DSTBI_FAILURE_USERMSG)
 # when gcc is used; otherwise saving PNGs may crash in stb_image_write
 if(SFML_COMPILER_GCC)
     set_source_files_properties(${SRCROOT}/ImageLoader.cpp PROPERTIES COMPILE_FLAGS -fno-strict-aliasing)
+endif()
+if(SFML_COMPILER_GCC AND BUILD_SHARED_LIBS)
+    list(APPEND GRAPHICS_EXT_LIBS "-lgcc_s -lgcc")
 endif()
 
 # define the sfml-graphics target

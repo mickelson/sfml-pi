@@ -211,6 +211,11 @@ if(SFML_RPI)
     set(SFML_OPENGL_ES 1)
 endif()
 
+#check if we are building for DRM
+if(SFML_DRM)
+    add_definitions(-DSFML_DRM)
+endif()
+
 # define SFML_OPENGL_ES if needed
 if(SFML_OPENGL_ES)
     add_definitions(-DSFML_OPENGL_ES)

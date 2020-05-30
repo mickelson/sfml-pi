@@ -47,6 +47,11 @@
         #include <SFML/Window/Win32/WglContext.hpp>
         typedef sf::priv::WglContext ContextType;
 
+    #elif defined(SFML_DRM)
+
+        #include <SFML/Window/Unix/DRM/DRMContext.hpp>
+        typedef sf::priv::DRMContext ContextType;
+
     #elif defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_FREEBSD)
 
         #include <SFML/Window/Unix/GlxContext.hpp>
@@ -66,8 +71,12 @@
         #include <SFML/Window/iOS/EaglContext.hpp>
         typedef sf::priv::EaglContext ContextType;
 
-    #else
+    #elif defined(SFML_DRM)
 
+        #include <SFML/Window/Unix/DRM/DRMContext.hpp>
+        typedef sf::priv::DRMContext ContextType;
+
+    #else
         #include <SFML/Window/EglContext.hpp>
         typedef sf::priv::EglContext ContextType;
 
@@ -231,13 +240,13 @@ void GlContext::initResource()
         extensions.clear();
 
         // Check whether a >= 3.0 context is available
-#ifndef SFML_RPI
+#if defined(SFML_RPI)
+        if (1)
+#else
         int majorVersion = 0;
         glGetIntegerv(GL_MAJOR_VERSION, &majorVersion);
 
         if (glGetError() == GL_INVALID_ENUM)
-#else
-        if (1)
 #endif
         {
             // Try to load the < 3.0 way

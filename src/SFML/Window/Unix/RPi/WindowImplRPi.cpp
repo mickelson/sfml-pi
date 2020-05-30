@@ -30,7 +30,7 @@
 ////////////////////////////////////////////////////////////
 #include <SFML/Window/WindowStyle.hpp> // important to be included first (conflict with None)
 #include <SFML/Window/Unix/RPi/WindowImplRPi.hpp>
-#include <SFML/Window/Unix/KMS/InputImpl.hpp>
+#include <SFML/Window/Unix/DRM/InputImplUDev.hpp>
 #include <SFML/Window/Event.hpp>
 #include <SFML/System/Err.hpp>
 

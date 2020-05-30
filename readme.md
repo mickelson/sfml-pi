@@ -10,14 +10,14 @@ This software has a number of known limitations.  It should work if your program
 window and does not need to show the mouse cursor.  It is not intended to handle multiple windows.
 
 
-Installing (RPi 4+ - DRM/KMS version)
+Installing (DRM/KMS version)
 -------
 **Step 1:** Install the SFML dependencies
 
 - See: <http://www.sfml-dev.org/tutorials/2.4/compile-with-cmake.php>
 - You need to install the libraries required for building SFML on Linux (other than the
-   ones... x11, xrandr, xcb*).
-- You also need to install a couple of libraries required specifically by SFML-Pi: "drm-dev", "gbm-dev" and "EGL-dev"
+  x11 ones... x11, xrandr, xcb*).
+- You also need to install the following additional libraries: "drm-dev", "gbm-dev" and "EGL-dev"
 
 - The command to do this on a debian-based system could look something like this:
 

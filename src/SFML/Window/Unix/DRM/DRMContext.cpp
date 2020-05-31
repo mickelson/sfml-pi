@@ -38,6 +38,7 @@
 
 #include <unistd.h>
 #include <cstring>
+#include <cstdlib>
 #include <errno.h>
 
 #include <EGL/egl.h>
@@ -89,7 +90,7 @@ namespace
             return;
 
         if ( init_drm( &my_drm,
-            NULL,     // device
+            getenv("SFML_DRM_DEVICE"),     // device - use environment variable "SFML_DRM_DEVICE" or NULL if not set
             "",       // requested mode
             0 ) < 0 ) // vrefresh
         {
@@ -530,6 +531,10 @@ EGLConfig DRMContext::getBestConfig(EGLDisplay display, unsigned int bitsPerPixe
         EGL_DEPTH_SIZE, settings.depthBits,
         EGL_STENCIL_SIZE, settings.stencilBits,
         EGL_SAMPLE_BUFFERS, settings.antialiasingLevel,
+        EGL_BLUE_SIZE, 8,
+        EGL_GREEN_SIZE, 8,
+        EGL_RED_SIZE, 8,
+        EGL_ALPHA_SIZE, 8,
 
         EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
 #if defined(SFML_OPENGL_ES)

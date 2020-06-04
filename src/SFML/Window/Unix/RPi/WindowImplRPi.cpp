@@ -49,6 +49,8 @@ WindowImplRPi::WindowImplRPi(WindowHandle handle)
     m_nativeWindow.element = 0;
     m_nativeWindow.width = 0;
     m_nativeWindow.height = 0;
+
+    sf::priv::InputImpl::grabInput();
 }
 
 
@@ -95,6 +97,8 @@ WindowImplRPi::WindowImplRPi(VideoMode mode, const String& title, unsigned long 
     m_nativeWindow.width = mode.width;
     m_nativeWindow.height = mode.height;
     vc_dispmanx_update_submit_sync( dispman_update );
+
+    sf::priv::InputImpl::grabInput();
 }
 
 
@@ -111,6 +115,8 @@ WindowImplRPi::~WindowImplRPi()
 
     if ( m_display )
         vc_dispmanx_display_close( m_display );
+
+    sf::priv::InputImpl::ungrabInput();
 }
 
 

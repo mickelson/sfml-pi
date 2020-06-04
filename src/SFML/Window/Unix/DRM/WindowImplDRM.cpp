@@ -49,6 +49,7 @@ WindowImplDRM::WindowImplDRM(WindowHandle handle)
     : WindowImpl(),
     m_size( 0, 0 )
 {
+    sf::priv::InputImpl::grabInput();
 }
 
 
@@ -58,12 +59,14 @@ WindowImplDRM::WindowImplDRM(VideoMode mode, const String& title, unsigned long 
     m_size( mode.width, mode.height )
 
 {
+    sf::priv::InputImpl::grabInput();
 }
 
 
 ////////////////////////////////////////////////////////////
 WindowImplDRM::~WindowImplDRM()
 {
+    sf::priv::InputImpl::ungrabInput();
 }
 
 

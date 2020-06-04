@@ -93,6 +93,12 @@ namespace
 
     void init()
     {
+        static bool initialized = false;
+        if ( initialized )
+            return;
+
+        initialized=true;
+
         for ( int i=0; i<32; i++ )
         {
             std::string name( "/dev/input/event" );
@@ -311,12 +317,7 @@ namespace
 
         // Ensure that we are initialized
         //
-        static bool initialized = false;
-        if ( !initialized )
-        {
-            init();
-            initialized = true;
-        }
+        init();
 
         // This is for handling the Backspace and DEL text events, which we
         // generate based on keystrokes (and not stdin)
@@ -657,6 +658,24 @@ bool InputImpl::checkEvent( sf::Event &ev )
     }
 
     return false;
+}
+
+void InputImpl::grabInput()
+{
+    sf::Lock lock( inpMutex );
+    init();
+
+    for ( std::vector<int>::iterator itr=fds.begin(); itr != fds.end(); ++itr )
+        ioctl( *itr, EVIOCGRAB, 1 );
+}
+
+void InputImpl::ungrabInput()
+{
+    sf::Lock lock( inpMutex );
+    init();
+
+    for ( std::vector<int>::iterator itr=fds.begin(); itr != fds.end(); ++itr )
+        ioctl( *itr, EVIOCGRAB, 0 );
 }
 
 } // namespace priv

@@ -91,6 +91,48 @@ namespace
             close( *itr );
     }
 
+#define BITS_PER_LONG           (sizeof(unsigned long) * 8)
+#define NBITS(x)                ((((x)-1)/BITS_PER_LONG)+1)
+#define OFF(x)                  ((x)%BITS_PER_LONG)
+#define LONG(x)                 ((x)/BITS_PER_LONG)
+#define test_bit(bit, array)    ((array[LONG(bit)] >> OFF(bit)) & 1)
+
+    //
+    // Only keep fds that we think are a keyboard, mouse or touchpad/touchscreen
+    //
+    // Joysticks are handled in /src/SFML/Window/Unix/JoystickImpl.cpp
+    //
+    bool keep_fd( int fd )
+    {
+        unsigned long bitmask_ev[NBITS(EV_MAX)];
+        unsigned long bitmask_key[NBITS(KEY_MAX)];
+        unsigned long bitmask_abs[NBITS(ABS_MAX)];
+        unsigned long bitmask_rel[NBITS(REL_MAX)];
+
+        ioctl( fd, EVIOCGBIT( 0, sizeof( bitmask_ev ) ), &bitmask_ev );
+        ioctl( fd, EVIOCGBIT( EV_KEY, sizeof( bitmask_key ) ), &bitmask_key );
+        ioctl( fd, EVIOCGBIT( EV_ABS, sizeof( bitmask_abs ) ), &bitmask_abs );
+        ioctl( fd, EVIOCGBIT( EV_REL, sizeof( bitmask_rel ) ), &bitmask_rel );
+
+        // This is the keyboard test used by SDL
+        //
+        // the first 32 bits are ESC, numbers and Q to D;  If we have any of those,
+        // consider it a keyboard device; do not test for KEY_RESERVED, though
+        bool is_keyboard = ( bitmask_key[0] & 0xFFFFFFFE );
+
+        bool is_abs = test_bit( EV_ABS, bitmask_ev )
+            && test_bit( ABS_X, bitmask_abs ) && test_bit( ABS_Y, bitmask_abs );
+
+        bool is_rel = test_bit( EV_REL, bitmask_ev )
+            && test_bit( REL_X, bitmask_rel ) && test_bit( REL_Y, bitmask_rel );
+
+        bool is_mouse = ( is_abs || is_rel ) && test_bit( BTN_MOUSE, bitmask_key );
+
+        bool is_touch = is_abs && ( test_bit( BTN_TOOL_FINGER, bitmask_key ) || test_bit( BTN_TOUCH, bitmask_key) );
+
+        return is_keyboard || is_mouse || is_touch;
+    }
+
     void init()
     {
         static bool initialized = false;
@@ -116,14 +158,10 @@ namespace
                 continue;
             }
 
-            // TODO:
-            //
-            // For now we blindly keep all file descriptors open... maybe try
-            // to figure out if fd is a mouse or keyboard and close the rest?
-            //
-            // see: ioctl( fd, EVIOCGNAME( sizeof(buff), buff );
-            //
-            fds.push_back( temp_fd );
+            if ( keep_fd( temp_fd ) )
+                fds.push_back( temp_fd );
+            else
+                close( temp_fd );
         }
 
         atexit( uninit );

@@ -165,8 +165,8 @@ public:
     ////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////
     static bool checkEvent( sf::Event &ev );
-    static void grabInput();
-    static void ungrabInput();
+    static void setTerminalConfig();
+    static void restoreTerminalConfig();
 };
 
 } // namespace priv

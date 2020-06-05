@@ -80,6 +80,8 @@ namespace
     std::queue<sf::Event> eventQueue;                          // events received and waiting to be consumed
     const int MAX_QUEUE = 64;                                  // The maximum size we let eventQueue grow to
 
+    termios newt, oldt;                                        // Terminal configurations
+
     bool altDown() { return ( keyMap[sf::Keyboard::LAlt] || keyMap[sf::Keyboard::RAlt] ); }
     bool controlDown() { return ( keyMap[sf::Keyboard::LControl] || keyMap[sf::Keyboard::RControl] ); }
     bool shiftDown() { return ( keyMap[sf::Keyboard::LShift] || keyMap[sf::Keyboard::RShift] ); }
@@ -504,11 +506,9 @@ namespace
 
         // Finally check if there is a Text event on stdin
         //
-        struct termios newt, oldt;
-        tcgetattr( STDIN_FILENO, &oldt );
+        // We only clear the ICANON flag for the time of reading
 
-        newt = oldt;
-        newt.c_lflag &= ~( ICANON | ECHO );
+        newt.c_lflag &= ~ICANON;
         tcsetattr( STDIN_FILENO, TCSANOW, &newt );
 
         struct timeval tv;
@@ -542,7 +542,8 @@ namespace
             }
         }
 
-        tcsetattr( STDIN_FILENO, TCSANOW, &oldt );
+        newt.c_lflag |= ICANON;
+        tcsetattr( STDIN_FILENO, TCSANOW, &newt );
 
         if ( c > 0 )
         {
@@ -698,22 +699,27 @@ bool InputImpl::checkEvent( sf::Event &ev )
     return false;
 }
 
-void InputImpl::grabInput()
+void InputImpl::setTerminalConfig()
 {
     sf::Lock lock( inpMutex );
     init();
 
-    for ( std::vector<int>::iterator itr=fds.begin(); itr != fds.end(); ++itr )
-        ioctl( *itr, EVIOCGRAB, 1 );
+    tcgetattr(STDIN_FILENO, &newt);          // get current terminal config
+    oldt = newt;                             // create a backup
+    newt.c_lflag &= ~ECHO;                   // disable console feedback
+    newt.c_lflag |= ICANON;                  // disable noncanonical mode
+    newt.c_iflag |= IGNCR;                   // ignore carriage return
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt); // set our new config
+    tcflush(STDIN_FILENO, TCIFLUSH);         // flush the buffer
 }
 
-void InputImpl::ungrabInput()
+void InputImpl::restoreTerminalConfig()
 {
     sf::Lock lock( inpMutex );
     init();
 
-    for ( std::vector<int>::iterator itr=fds.begin(); itr != fds.end(); ++itr )
-        ioctl( *itr, EVIOCGRAB, 0 );
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt); // restore terminal config
+    tcflush(STDIN_FILENO, TCIFLUSH);         // flush the buffer
 }
 
 } // namespace priv

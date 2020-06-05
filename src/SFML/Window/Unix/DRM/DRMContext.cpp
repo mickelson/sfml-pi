@@ -65,9 +65,14 @@ namespace
     static bool initialized = false;
     static struct drm my_drm;
     static struct gbm_device *my_gbm_device = NULL;
+    static int context_count = 0;
+    static EGLDisplay display = EGL_NO_DISPLAY;
 
     void cleanup()
     {
+        if ( !initialized )
+            return;
+
         drmModeSetCrtc( my_drm.fd,
             my_drm.original_crtc->crtc_id,
             my_drm.original_crtc->buffer_id,
@@ -81,6 +86,8 @@ namespace
         my_gbm_device = NULL;
 
         close( my_drm.fd );
+
+        display = EGL_NO_DISPLAY;
         initialized=false;
     }
 
@@ -89,10 +96,18 @@ namespace
         if ( initialized )
             return;
 
+        // device: Use environment variable "SFML_DRM_DEVICE" (or NULL if not set)
+        char *device_str = getenv( "SFML_DRM_DEVICE" );
+        if ( device_str && !*device_str )
+            device_str=NULL;
+
+        // mode: Use environment variable "SFML_DRM_MODE" (or NULL if not set)
+        char *mode_str = getenv( "SFML_DRM_MODE" );
+
         if ( init_drm( &my_drm,
-            getenv("SFML_DRM_DEVICE"),     // device - use environment variable "SFML_DRM_DEVICE" or NULL if not set
-            "",       // requested mode
-            0 ) < 0 ) // vrefresh
+            device_str,          // device
+            mode_str,            // requested mode
+            0 ) < 0 )            // vrefresh
         {
             sf::err() << "Error initializing drm" << std::endl;
             return;
@@ -103,7 +118,6 @@ namespace
         std::atexit( cleanup );
         initialized = true;
     }
-
 
     bool has_ext(const char *extension_list, const char *ext)
     {
@@ -125,10 +139,9 @@ namespace
         }
     }
 
+
     EGLDisplay getInitializedDisplay()
     {
-        static EGLDisplay display = EGL_NO_DISPLAY;
-
         check_init();
 
         if (display == EGL_NO_DISPLAY)
@@ -189,7 +202,6 @@ namespace
         int *waiting_for_flip = (int *)data;
         *waiting_for_flip = 0;
     }
-
 }
 
 
@@ -210,6 +222,8 @@ m_height  (0),
 m_shown   (false),
 m_scanout (false)
 {
+    context_count++;
+
     // Get the initialized EGL display
     m_display = getInitializedDisplay();
 
@@ -240,6 +254,8 @@ m_height  (0),
 m_shown   (false),
 m_scanout (false)
 {
+    context_count++;
+
     // Get the initialized EGL display
     m_display = getInitializedDisplay();
 
@@ -271,6 +287,8 @@ m_height  (0),
 m_shown   (false),
 m_scanout (false)
 {
+    context_count++;
+
     // Get the initialized EGL display
     m_display = getInitializedDisplay();
 
@@ -314,6 +332,10 @@ DRMContext::~DRMContext()
 
     if ( m_gbm_surface )
         gbm_surface_destroy( m_gbm_surface );
+
+    context_count--;
+    if ( context_count == 0 )
+        cleanup();
 }
 
 

@@ -103,11 +103,20 @@ namespace
 
         // mode: Use environment variable "SFML_DRM_MODE" (or NULL if not set)
         char *mode_str = getenv( "SFML_DRM_MODE" );
+        
+		// refresh: Use environment variable "SFML_DRM_REFRESH" (or 0 if not set)
+		// use in combination with mode to request specific refresh rate for the mode
+		// if multiple refresh rates for same mode might be supported
+		int vrefresh = 0;
+		char *refresh_str = getenv( "SFML_DRM_REFRESH" );
+
+		if (refresh_str)
+			vrefresh = atoi(refresh_str);
 
         if ( init_drm( &my_drm,
             device_str,          // device
             mode_str,            // requested mode
-            0 ) < 0 )            // vrefresh
+            vrefresh ) < 0 )     // vrefresh
         {
             sf::err() << "Error initializing drm" << std::endl;
             return;

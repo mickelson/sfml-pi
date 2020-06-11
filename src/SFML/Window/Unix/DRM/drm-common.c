@@ -308,5 +308,10 @@ int init_drm(struct drm *drm, const char *device, const char *mode_str,
 
     // get original display mode so we can restore display mode after program exits
     drm->original_crtc = drmModeGetCrtc( drm->fd, drm->crtc_id );
+	
+	if(getenv( "SFML_DRM_DEBUG" )) {
+		printf("DRM Mode used: %s@%d\n", drm->mode->name, drm->mode->vrefresh);
+	}
+
 	return 0;
 }

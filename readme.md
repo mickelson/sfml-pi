@@ -81,4 +81,4 @@ This mode uses OpenGL ES
 
 More Info
 ---------
-Please consult the SFML readme for more info: [readme-original.md][readme-original.md]
+Please consult the SFML readme for more info: [readme-original.md](readme-original.md)

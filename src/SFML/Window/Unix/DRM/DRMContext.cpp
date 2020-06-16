@@ -40,6 +40,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <errno.h>
+#include <poll.h>
 
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
@@ -64,9 +65,46 @@ namespace
     PFNEGLCREATEPLATFORMWINDOWSURFACEEXTPROC eglCreatePlatformWindowSurfaceEXT = NULL;
     static bool initialized = false;
     static struct drm my_drm;
+    static drmEventContext my_evctx;
+    static pollfd my_fds;
     static struct gbm_device *my_gbm_device = NULL;
     static int context_count = 0;
     static EGLDisplay display = EGL_NO_DISPLAY;
+    static int waiting_for_flip = 0;
+
+    static void page_flip_handler(int fd, unsigned int frame,
+        unsigned int sec, unsigned int usec, void *data)
+    {
+        // suppress unused param warning
+        (void)fd, (void)frame, (void)sec, (void)usec;
+
+        int *waiting_for_flip = (int *)data;
+        *waiting_for_flip = 0;
+    }
+
+    static bool wait_for_flip(int timeout)
+    {
+        while ( waiting_for_flip )
+        {
+            my_fds.revents = 0;
+
+            if ( poll( &my_fds, 1, timeout ) < 0 )
+                return false;
+
+            if ( my_fds.revents & ( POLLHUP | POLLERR ))
+                return false;
+
+            if ( my_fds.revents & POLLIN )
+            {
+                drmHandleEvent( my_drm.fd, &my_evctx );
+            }
+            else
+            {
+                return false;
+            }
+        }
+        return true;
+    }
 
     void cleanup()
     {
@@ -134,6 +172,12 @@ namespace
 
         std::atexit( cleanup );
         initialized = true;
+
+        my_fds.fd = my_drm.fd;
+        my_fds.events = POLLIN;
+        my_evctx.version = 2;
+        my_evctx.page_flip_handler = page_flip_handler;
+
     }
 
     bool has_ext(const char *extension_list, const char *ext)
@@ -209,16 +253,6 @@ namespace
 
         return display;
     }
-
-    static void page_flip_handler(int fd, unsigned int frame,
-        unsigned int sec, unsigned int usec, void *data )
-    {
-        // suppress unused param warning
-        (void)fd, (void)frame, (void)sec, (void)usec;
-
-        int *waiting_for_flip = (int *)data;
-        *waiting_for_flip = 0;
-    }
 }
 
 
@@ -232,7 +266,8 @@ m_display (EGL_NO_DISPLAY),
 m_context (EGL_NO_CONTEXT),
 m_surface (EGL_NO_SURFACE),
 m_config  (NULL),
-m_last_bo (NULL),
+m_cur_bo (NULL),
+m_next_bo (NULL),
 m_gbm_surface (NULL),
 m_width   (0),
 m_height  (0),
@@ -264,7 +299,8 @@ m_display (EGL_NO_DISPLAY),
 m_context (EGL_NO_CONTEXT),
 m_surface (EGL_NO_SURFACE),
 m_config  (NULL),
-m_last_bo (NULL),
+m_cur_bo (NULL),
+m_next_bo (NULL),
 m_gbm_surface (NULL),
 m_width   (0),
 m_height  (0),
@@ -297,7 +333,8 @@ m_display (EGL_NO_DISPLAY),
 m_context (EGL_NO_CONTEXT),
 m_surface (EGL_NO_SURFACE),
 m_config  (NULL),
-m_last_bo (NULL),
+m_cur_bo (NULL),
+m_next_bo (NULL),
 m_gbm_surface (NULL),
 m_width   (0),
 m_height  (0),
@@ -344,8 +381,11 @@ DRMContext::~DRMContext()
         m_surface = EGL_NO_SURFACE;
     }
 
-    if ( m_last_bo )
-        gbm_surface_release_buffer( m_gbm_surface, m_last_bo );
+    if ( m_cur_bo )
+        gbm_surface_release_buffer( m_gbm_surface, m_cur_bo );
+
+    if ( m_next_bo )
+        gbm_surface_release_buffer( m_gbm_surface, m_next_bo );
 
     if ( m_gbm_surface )
         gbm_surface_destroy( m_gbm_surface );
@@ -371,106 +411,68 @@ bool DRMContext::makeCurrent(bool current)
 ////////////////////////////////////////////////////////////
 void DRMContext::display()
 {
-    if (m_surface == EGL_NO_SURFACE)
+    if ( m_surface == EGL_NO_SURFACE )
         return;
-
-    eglCheck( eglSwapBuffers( m_display, m_surface ) );
 
     if ( !m_scanout )
+    {
+        eglCheck( eglSwapBuffers( m_display, m_surface ));
         return;
+    }
 
     //
-    // handle display of buffer to the screen
+    // Handle display of buffer to the screen
     //
     struct drm_fb *fb = NULL;
+
+    if ( !wait_for_flip( -1 ))
+        return;
+
+    if ( m_cur_bo )
+    {
+        gbm_surface_release_buffer( m_gbm_surface, m_cur_bo );
+        m_cur_bo = NULL;
+    }
+
+    eglCheck( eglSwapBuffers( m_display, m_surface ));
+
+    m_cur_bo = m_next_bo;
+
+    //
+    // This call must be preceeded by a single call to eglSwapBuffers()
+    //
+    m_next_bo = gbm_surface_lock_front_buffer( m_gbm_surface );
+
+    if ( !m_next_bo )
+        return;
+
+    fb = drm_fb_get_from_bo( m_next_bo );
+    if ( !fb )
+    {
+        err() << "Failed to get FB from buffer object" << std::endl;
+        return;
+    }
 
     //
     // If first time, need to first call drmModeSetCrtc()
     //
     if ( !m_shown )
     {
-        // This call must be preceeded by a single call to eglSwapBuffers()
-        m_last_bo = gbm_surface_lock_front_buffer( m_gbm_surface );
-        if (!m_last_bo)
-            return;
-
-        fb = drm_fb_get_from_bo( m_last_bo );
-        if (!fb)
-        {
-            err() << "Could not get FB from buffer object" << std::endl;
-            return;
-        }
-
         if ( drmModeSetCrtc( my_drm.fd, my_drm.crtc_id, fb->fb_id, 0, 0,
-            &my_drm.connector_id, 1, my_drm.mode ) )
+            &my_drm.connector_id, 1, my_drm.mode ))
         {
             err() << "Failed to set mode: " << strerror(errno) << std::endl;
             abort();
         }
-
-        eglCheck( eglSwapBuffers( m_display, m_surface ) );
-
         m_shown = true;
     }
 
     //
     // Do page flip
     //
-
-    // This call must be preceeded by a single call to eglSwapBuffers()
-    struct gbm_bo *bo = gbm_surface_lock_front_buffer( m_gbm_surface );
-    if (!bo)
-        return;
-
-    fb = drm_fb_get_from_bo( bo );
-    if (!fb)
-    {
-        err() << "Failed to get FB from buffer object" << std::endl;
-        return;
-    }
-
-    int waiting_for_flip = 1;
-    fd_set fds;
-    drmEventContext evctx;
-    evctx.version = 2;
-    evctx.page_flip_handler = page_flip_handler;
-
-    int ret = drmModePageFlip( my_drm.fd, my_drm.crtc_id, fb->fb_id,
-        DRM_MODE_PAGE_FLIP_EVENT, &waiting_for_flip );
-
-    if ( ret )
-        return;
-
-    while ( waiting_for_flip )
-    {
-        FD_ZERO( &fds );
-        FD_SET( 0, &fds );
-        FD_SET( my_drm.fd, &fds );
-
-        ret = select( my_drm.fd + 1, &fds, NULL, NULL, NULL );
-        if ( ret < 0 )
-        {
-            // select err
-            err() << "Error on select() after drm page flip" << std::endl;
-            return;
-        }
-        else if ( ret == 0 )
-        {
-            // select timeout
-            return;
-        }
-        else if ( FD_ISSET( 0, &fds ) )
-        {
-            // user interrupted
-            return;
-        }
-        drmHandleEvent( my_drm.fd, &evctx );
-    }
-
-    if ( m_last_bo )
-        gbm_surface_release_buffer( m_gbm_surface, m_last_bo );
-
-    m_last_bo = bo;
+    if ( !drmModePageFlip( my_drm.fd, my_drm.crtc_id, fb->fb_id,
+            DRM_MODE_PAGE_FLIP_EVENT, &waiting_for_flip ))
+        waiting_for_flip = 1;
 }
 
 

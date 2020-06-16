@@ -173,7 +173,8 @@ private:
     EGLSurface  m_surface; ///< The internal EGL surface
     EGLConfig   m_config;  ///< The internal EGL config
 
-    struct gbm_bo *m_last_bo;
+    struct gbm_bo *m_cur_bo;
+    struct gbm_bo *m_next_bo;
     struct gbm_surface *m_gbm_surface;
     int m_width;
     int m_height;

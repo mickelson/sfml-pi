@@ -706,7 +706,7 @@ void InputImpl::setTerminalConfig()
 
     tcgetattr(STDIN_FILENO, &newt);          // get current terminal config
     oldt = newt;                             // create a backup
-    newt.c_lflag &= ~ECHO;                   // disable console feedback
+    newt.c_lflag &= ~ECHO & ~ISIG;           // disable console feedback and signals
     newt.c_lflag |= ICANON;                  // disable noncanonical mode
     newt.c_iflag |= IGNCR;                   // ignore carriage return
     tcsetattr(STDIN_FILENO, TCSANOW, &newt); // set our new config

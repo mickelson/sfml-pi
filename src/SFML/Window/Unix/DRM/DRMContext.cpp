@@ -134,6 +134,12 @@ namespace
 
         my_drm.fd = -1;
         my_drm.mode = 0;
+
+        memset(&my_fds,     0, sizeof(struct pollfd));
+        memset(&my_evctx,   0, sizeof(drmEventContext));
+
+        waiting_for_flip = 0;
+
         initialized = false;
     }
 

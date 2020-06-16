@@ -45,7 +45,7 @@ behaviour with the the following environment variables:
 
 - Set "SFML_DRM_DEVICE" to indicate the device you want to use.
 - Set "SFML_DRM_MODE" to indicate the video mode you want to use.
-- Set "SFML_DRM_RATE" to request a specific refresh rate.
+- Set "SFML_DRM_REFRESH" to request a specific refresh rate.
 - Set "SFML_DRM_DEBUG" for a console print out of the mode and rate settings used.
 
 

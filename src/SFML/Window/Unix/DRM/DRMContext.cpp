@@ -82,13 +82,21 @@ namespace
             1,
             &my_drm.original_crtc->mode );
 
+        drmModeFreeConnector( my_drm.saved_connector );
+        drmModeFreeEncoder( my_drm.saved_encoder );
+        drmModeFreeCrtc( my_drm.original_crtc );
+
+        eglTerminate( display );
+        display = EGL_NO_DISPLAY;
+
         gbm_device_destroy( my_gbm_device );
         my_gbm_device = NULL;
 
         close( my_drm.fd );
 
-        display = EGL_NO_DISPLAY;
-        initialized=false;
+        my_drm.fd = -1;
+        my_drm.mode = 0;
+        initialized = false;
     }
 
     void check_init()
@@ -103,7 +111,7 @@ namespace
 
         // mode: Use environment variable "SFML_DRM_MODE" (or NULL if not set)
         char *mode_str = getenv( "SFML_DRM_MODE" );
-        
+
 		// refresh: Use environment variable "SFML_DRM_REFRESH" (or 0 if not set)
 		// use in combination with mode to request specific refresh rate for the mode
 		// if multiple refresh rates for same mode might be supported

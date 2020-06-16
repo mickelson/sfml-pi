@@ -40,7 +40,20 @@ namespace priv
 std::vector<VideoMode> VideoModeImpl::getFullscreenModes()
 {
     std::vector<VideoMode> modes;
-    modes.push_back(getDesktopMode());
+
+    struct drm *drm = sf::priv::DRMContext::get_drm();
+    drmModeConnectorPtr conn = drm->saved_connector;
+
+    if ( conn )
+    {
+        for ( int i=0; i < conn->count_modes; i++ )
+            modes.push_back(
+                VideoMode( conn->modes[i].hdisplay,
+                    conn->modes[i].vdisplay ) );
+    }
+    else
+        modes.push_back(getDesktopMode());
+
     return modes;
 }
 
@@ -49,7 +62,11 @@ std::vector<VideoMode> VideoModeImpl::getFullscreenModes()
 VideoMode VideoModeImpl::getDesktopMode()
 {
     struct drm *drm = sf::priv::DRMContext::get_drm();
-    return VideoMode( drm->mode->hdisplay, drm->mode->vdisplay );
+    drmModeModeInfoPtr m = drm->mode;
+    if ( m )
+        return VideoMode( m->hdisplay, m->vdisplay );
+    else
+        return VideoMode( 0, 0 );
 }
 
 } // namespace priv

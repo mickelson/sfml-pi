@@ -60,6 +60,9 @@ struct drm {
 	uint32_t connector_id;
 
     drmModeCrtcPtr original_crtc;
+
+    drmModeConnectorPtr saved_connector;
+    drmModeEncoderPtr saved_encoder;
 };
 
 struct drm_fb {

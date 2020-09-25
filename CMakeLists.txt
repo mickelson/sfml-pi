@@ -49,8 +49,8 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Config.cmake)
 
 # setup version numbers
 set(VERSION_MAJOR 2)
-set(VERSION_MINOR 4)
-set(VERSION_PATCH 2)
+set(VERSION_MINOR 5)
+set(VERSION_PATCH 1)
 
 # add the SFML header path
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -127,6 +127,9 @@ if(SFML_OS_ANDROID)
     if (ANDROID_STL MATCHES "_shared")
         add_definitions("-DSTL_LIBRARY=${ANDROID_STL}")
     endif()
+
+    # let the user switch ABIs
+    set(ANDROID_ABI "armeabi-v7a" CACHE STRING "Look at the NDK docs for currently supported ABIs")
 
     # this is a workaround to compile sfml-activity without the stl library as a dependency
     # we save the original compilation command line to restore it later in Macro.cmake
@@ -498,15 +501,17 @@ elseif(SFML_OS_MACOSX)
 
 elseif(SFML_OS_IOS)
 
-    # fix CMake install rules broken for iOS (see http://public.kitware.com/Bug/view.php?id=12506)
+    # fix CMake install rules broken for iOS (see https://public.kitware.com/Bug/view.php?id=12506)
     if(SFML_OS_IOS)
         install(DIRECTORY "${CMAKE_BINARY_DIR}/lib/\$ENV{CONFIGURATION}/" DESTINATION lib${LIB_SUFFIX})
     endif()
 
-    # since the iOS libraries are built as static, we must install the SFML dependencies
-    # too so that the end user can easily link them to its final application
-    if(SFML_BUILD_GRAPHICS)
-        install(FILES extlibs/libs-ios/libfreetype.a extlibs/libs-ios/libjpeg.a DESTINATION lib)
+    if(NOT SFML_USE_SYSTEM_DEPS)
+        # since the iOS libraries are built as static, we must install the SFML dependencies
+        # too so that the end user can easily link them to its final application
+        if(SFML_BUILD_GRAPHICS)
+            install(FILES extlibs/libs-ios/libfreetype.a DESTINATION lib)
+        endif()
     endif()
 
 elseif(SFML_OS_ANDROID)

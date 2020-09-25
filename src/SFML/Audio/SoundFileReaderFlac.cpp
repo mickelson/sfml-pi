@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2017 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2018 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -284,14 +284,14 @@ Uint64 SoundFileReaderFlac::read(Int16* samples, Uint64 maxCount)
     assert(m_decoder);
 
     // If there are leftovers from previous call, use it first
-    Uint64 left = m_clientData.leftovers.size();
+    std::size_t left = m_clientData.leftovers.size();
     if (left > 0)
     {
         if (left > maxCount)
         {
             // There are more leftovers than needed
-            std::copy(m_clientData.leftovers.begin(), m_clientData.leftovers.begin() + maxCount, samples);
-            std::vector<Int16> leftovers(m_clientData.leftovers.begin() + maxCount, m_clientData.leftovers.end());
+            std::copy(m_clientData.leftovers.begin(), m_clientData.leftovers.begin() + static_cast<std::size_t>(maxCount), samples);
+            std::vector<Int16> leftovers(m_clientData.leftovers.begin() + static_cast<std::size_t>(maxCount), m_clientData.leftovers.end());
             m_clientData.leftovers.swap(leftovers);
             return maxCount;
         }

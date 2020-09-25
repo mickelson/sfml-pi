@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2017 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2018 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -69,6 +69,9 @@
     #include <GLES/glext.h>
     
     // We're not using OpenGL ES 2+ yet, but we can use the sRGB extension
+    // We need to import gl2platform.h, would normally be included by gl2.h
+    // which was included by gl2ext.h in older NDK versions
+    #include <GLES2/gl2platform.h>
     #include <GLES2/gl2ext.h>
 
 #endif

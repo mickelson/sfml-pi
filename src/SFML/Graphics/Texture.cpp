@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2017 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2018 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -129,6 +129,11 @@ bool Texture::create(unsigned int width, unsigned int height)
         return false;
     }
 
+    TransientContextLock lock;
+
+    // Make sure that extensions are initialized
+    priv::ensureExtensionsInit();
+
     // Compute the internal texture dimensions depending on NPOT textures support
     Vector2u actualSize(getValidSize(width), getValidSize(height));
 
@@ -150,8 +155,6 @@ bool Texture::create(unsigned int width, unsigned int height)
     m_pixelsFlipped = false;
     m_fboAttachment = false;
 
-    TransientContextLock lock;
-
     // Create the OpenGL texture if it doesn't exist yet
     if (!m_texture)
     {
@@ -159,9 +162,6 @@ bool Texture::create(unsigned int width, unsigned int height)
         glCheck(glGenTextures(1, &texture));
         m_texture = static_cast<unsigned int>(texture);
     }
-
-    // Make sure that extensions are initialized
-    priv::ensureExtensionsInit();
 
     // Make sure that the current texture binding will be preserved
     priv::TextureSaver save;
@@ -502,7 +502,11 @@ void Texture::update(const Texture& texture, unsigned int x, unsigned int y)
         if ((sourceStatus == GLEXT_GL_FRAMEBUFFER_COMPLETE) && (destStatus == GLEXT_GL_FRAMEBUFFER_COMPLETE))
         {
             // Blit the texture contents from the source to the destination texture
-            glCheck(GLEXT_glBlitFramebuffer(0, 0, texture.m_size.x, texture.m_size.y, x, y, x + texture.m_size.x, y + texture.m_size.y, GL_COLOR_BUFFER_BIT, GL_NEAREST));
+            glCheck(GLEXT_glBlitFramebuffer(
+                0, texture.m_pixelsFlipped ? texture.m_size.y : 0, texture.m_size.x, texture.m_pixelsFlipped ? 0 : texture.m_size.y, // Source rectangle, flip y if source is flipped
+                x, y, x + texture.m_size.x, y + texture.m_size.y, // Destination rectangle
+                GL_COLOR_BUFFER_BIT, GL_NEAREST
+            ));
         }
         else
         {
@@ -516,6 +520,20 @@ void Texture::update(const Texture& texture, unsigned int x, unsigned int y)
         // Delete the framebuffers
         glCheck(GLEXT_glDeleteFramebuffers(1, &sourceFrameBuffer));
         glCheck(GLEXT_glDeleteFramebuffers(1, &destFrameBuffer));
+
+        // Make sure that the current texture binding will be preserved
+        priv::TextureSaver save;
+
+        // Set the parameters of this texture
+        glCheck(glBindTexture(GL_TEXTURE_2D, m_texture));
+        glCheck(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, m_isSmooth ? GL_LINEAR : GL_NEAREST));
+        m_hasMipmap = false;
+        m_pixelsFlipped = false;
+        m_cacheId = getUniqueId();
+
+        // Force an OpenGL flush, so that the texture data will appear updated
+        // in all contexts immediately (solves problems in multi-threaded apps)
+        glCheck(glFlush());
 
         return;
     }
@@ -833,11 +851,6 @@ unsigned int Texture::getNativeHandle() const
 ////////////////////////////////////////////////////////////
 unsigned int Texture::getValidSize(unsigned int size)
 {
-    TransientContextLock lock;
-
-    // Make sure that extensions are initialized
-    priv::ensureExtensionsInit();
-
     if (GLEXT_texture_non_power_of_two)
     {
         // If hardware supports NPOT textures, then just return the unmodified size

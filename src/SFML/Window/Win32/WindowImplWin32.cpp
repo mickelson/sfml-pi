@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2017 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2018 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -39,6 +39,7 @@
 #include <GL/gl.h>
 #include <SFML/System/Err.hpp>
 #include <SFML/System/Utf.hpp>
+#include <Dbt.h>
 #include <vector>
 
 // MinGW lacks the definition of some Win32 constants
@@ -55,17 +56,14 @@
     #define MAPVK_VK_TO_VSC (0)
 #endif
 
-// Avoid including <Dbt.h> just for one define
-#ifndef DBT_DEVNODES_CHANGED
-    #define DBT_DEVNODES_CHANGED 0x0007
-#endif
-
 namespace
 {
     unsigned int               windowCount      = 0; // Windows owned by SFML
     unsigned int               handleCount      = 0; // All window handles
     const wchar_t*             className        = L"SFML_Window";
     sf::priv::WindowImplWin32* fullscreenWindow = NULL;
+
+    const GUID GUID_DEVINTERFACE_HID = {0x4d1e55b2, 0xf16f, 0x11cf, {0x88, 0xcb, 0x00, 0x11, 0x11, 0x00, 0x00, 0x30}};
 
     void setProcessDpiAware()
     {
@@ -170,7 +168,7 @@ m_lastSize        (mode.width, mode.height),
 m_resizing        (false),
 m_surrogate       (0),
 m_mouseInside     (false),
-m_fullscreen      (style & Style::Fullscreen),
+m_fullscreen      ((style & Style::Fullscreen) != 0),
 m_cursorGrabbed   (m_fullscreen)
 {
     // Set that this process is DPI aware and can handle DPI scaling
@@ -212,6 +210,10 @@ m_cursorGrabbed   (m_fullscreen)
 
     // Create the window
     m_handle = CreateWindowW(className, title.toWideString().c_str(), win32Style, left, top, width, height, NULL, NULL, GetModuleHandle(NULL), this);
+
+    // Register to receive device interface change notifications (used for joystick connection handling)
+    DEV_BROADCAST_DEVICEINTERFACE deviceInterface = {sizeof(DEV_BROADCAST_DEVICEINTERFACE), DBT_DEVTYP_DEVICEINTERFACE, 0, GUID_DEVINTERFACE_HID, 0};
+    RegisterDeviceNotification(m_handle, &deviceInterface, DEVICE_NOTIFY_WINDOW_HANDLE);
 
     // If we're the first window handle, we only need to poll for joysticks when WM_DEVICECHANGE message is received
     if (m_handle)
@@ -713,10 +715,10 @@ void WindowImplWin32::processEvent(UINT message, WPARAM wParam, LPARAM lParam)
             {
                 Event event;
                 event.type        = Event::KeyPressed;
-                event.key.alt     = HIWORD(GetAsyncKeyState(VK_MENU))    != 0;
-                event.key.control = HIWORD(GetAsyncKeyState(VK_CONTROL)) != 0;
-                event.key.shift   = HIWORD(GetAsyncKeyState(VK_SHIFT))   != 0;
-                event.key.system  = HIWORD(GetAsyncKeyState(VK_LWIN)) || HIWORD(GetAsyncKeyState(VK_RWIN));
+                event.key.alt     = HIWORD(GetKeyState(VK_MENU))    != 0;
+                event.key.control = HIWORD(GetKeyState(VK_CONTROL)) != 0;
+                event.key.shift   = HIWORD(GetKeyState(VK_SHIFT))   != 0;
+                event.key.system  = HIWORD(GetKeyState(VK_LWIN)) || HIWORD(GetKeyState(VK_RWIN));
                 event.key.code    = virtualKeyCodeToSF(wParam, lParam);
                 pushEvent(event);
             }
@@ -729,10 +731,10 @@ void WindowImplWin32::processEvent(UINT message, WPARAM wParam, LPARAM lParam)
         {
             Event event;
             event.type        = Event::KeyReleased;
-            event.key.alt     = HIWORD(GetAsyncKeyState(VK_MENU))    != 0;
-            event.key.control = HIWORD(GetAsyncKeyState(VK_CONTROL)) != 0;
-            event.key.shift   = HIWORD(GetAsyncKeyState(VK_SHIFT))   != 0;
-            event.key.system  = HIWORD(GetAsyncKeyState(VK_LWIN)) || HIWORD(GetAsyncKeyState(VK_RWIN));
+            event.key.alt     = HIWORD(GetKeyState(VK_MENU))    != 0;
+            event.key.control = HIWORD(GetKeyState(VK_CONTROL)) != 0;
+            event.key.shift   = HIWORD(GetKeyState(VK_SHIFT))   != 0;
+            event.key.system  = HIWORD(GetKeyState(VK_LWIN)) || HIWORD(GetKeyState(VK_RWIN));
             event.key.code    = virtualKeyCodeToSF(wParam, lParam);
             pushEvent(event);
             break;
@@ -968,8 +970,15 @@ void WindowImplWin32::processEvent(UINT message, WPARAM wParam, LPARAM lParam)
         case WM_DEVICECHANGE:
         {
             // Some sort of device change has happened, update joystick connections
-            if (wParam == DBT_DEVNODES_CHANGED)
-                JoystickImpl::updateConnections();
+            if ((wParam == DBT_DEVICEARRIVAL) || (wParam == DBT_DEVICEREMOVECOMPLETE))
+            {
+                // Some sort of device change has happened, update joystick connections if it is a device interface
+                DEV_BROADCAST_HDR* deviceBroadcastHeader = reinterpret_cast<DEV_BROADCAST_HDR*>(lParam);
+
+                if (deviceBroadcastHeader && (deviceBroadcastHeader->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE))
+                    JoystickImpl::updateConnections();
+            }
+
             break;
         }
     }

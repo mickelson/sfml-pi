@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2017 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2018 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -60,6 +60,21 @@ namespace
     }
     void close(FT_Stream)
     {
+    }
+
+    // Helper to intepret memory as a specific type
+    template <typename T, typename U>
+    inline T reinterpret(const U& input)
+    {
+        T output;
+        std::memcpy(&output, &input, sizeof(U));
+        return output;
+    }
+
+    // Combine outline thickness, boldness and font glyph index into a single 64-bit key
+    sf::Uint64 combine(float outlineThickness, bool bold, sf::Uint32 index)
+    {
+        return (static_cast<sf::Uint64>(reinterpret<sf::Uint32>(outlineThickness)) << 32) | (static_cast<sf::Uint64>(bold) << 31) | index;
     }
 }
 
@@ -331,10 +346,8 @@ const Glyph& Font::getGlyph(Uint32 codePoint, unsigned int characterSize, bool b
     // Get the page corresponding to the character size
     GlyphTable& glyphs = m_pages[characterSize].glyphs;
 
-    // Build the key by combining the code point, bold flag, and outline thickness
-    Uint64 key = (static_cast<Uint64>(*reinterpret_cast<Uint32*>(&outlineThickness)) << 32)
-               | (static_cast<Uint64>(bold ? 1 : 0) << 31)
-               |  static_cast<Uint64>(codePoint);
+    // Build the key by combining the glyph index (based on code point), bold flag, and outline thickness
+    Uint64 key = combine(outlineThickness, bold, FT_Get_Char_Index(static_cast<FT_Face>(m_face), codePoint));
 
     // Search the glyph into the cache
     GlyphTable::const_iterator it = glyphs.find(key);
@@ -558,7 +571,7 @@ Glyph Font::loadGlyph(Uint32 codePoint, unsigned int characterSize, bool bold, f
             FT_Stroker stroker = static_cast<FT_Stroker>(m_stroker);
 
             FT_Stroker_Set(stroker, static_cast<FT_Fixed>(outlineThickness * static_cast<float>(1 << 6)), FT_STROKER_LINECAP_ROUND, FT_STROKER_LINEJOIN_ROUND, 0);
-            FT_Glyph_Stroke(&glyphDesc, stroker, false);
+            FT_Glyph_Stroke(&glyphDesc, stroker, true);
         }
     }
 
@@ -631,9 +644,9 @@ Glyph Font::loadGlyph(Uint32 codePoint, unsigned int characterSize, bool bold, f
         if (bitmap.pixel_mode == FT_PIXEL_MODE_MONO)
         {
             // Pixels are 1 bit monochrome values
-            for (int y = padding; y < height - padding; ++y)
+            for (unsigned int y = padding; y < height - padding; ++y)
             {
-                for (int x = padding; x < width - padding; ++x)
+                for (unsigned int x = padding; x < width - padding; ++x)
                 {
                     // The color channels remain white, just fill the alpha channel
                     std::size_t index = x + y * width;
@@ -645,9 +658,9 @@ Glyph Font::loadGlyph(Uint32 codePoint, unsigned int characterSize, bool bold, f
         else
         {
             // Pixels are 8 bits gray levels
-            for (int y = padding; y < height - padding; ++y)
+            for (unsigned int y = padding; y < height - padding; ++y)
             {
-                for (int x = padding; x < width - padding; ++x)
+                for (unsigned int x = padding; x < width - padding; ++x)
                 {
                     // The color channels remain white, just fill the alpha channel
                     std::size_t index = x + y * width;
@@ -714,6 +727,7 @@ IntRect Font::findGlyphRect(Page& page, unsigned int width, unsigned int height)
                 // Make the texture 2 times bigger
                 Texture newTexture;
                 newTexture.create(textureWidth * 2, textureHeight * 2);
+                newTexture.setSmooth(true);
                 newTexture.update(page.texture);
                 page.texture.swap(newTexture);
             }
@@ -763,17 +777,22 @@ bool Font::setCurrentSize(unsigned int characterSize) const
                 err() << "Failed to set bitmap font size to " << characterSize << std::endl;
                 err() << "Available sizes are: ";
                 for (int i = 0; i < face->num_fixed_sizes; ++i)
-                    err() << face->available_sizes[i].height << " ";
+                {
+                    const unsigned int size = (face->available_sizes[i].y_ppem + 32) >> 6;
+                    err() << size << " ";
+                }
                 err() << std::endl;
+            }
+            else
+            {
+                err() << "Failed to set font size to " << characterSize << std::endl;
             }
         }
 
         return result == FT_Err_Ok;
     }
-    else
-    {
-        return true;
-    }
+
+     return true;
 }
 
 

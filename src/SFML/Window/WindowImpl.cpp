@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2017 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2018 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -94,7 +94,10 @@ m_joystickThreshold(0.1f)
     // Get the initial joystick states
     JoystickManager::getInstance().update();
     for (unsigned int i = 0; i < Joystick::Count; ++i)
+    {
         m_joystickStates[i] = JoystickManager::getInstance().getState(i);
+        std::fill_n(m_previousAxes[i], static_cast<std::size_t>(Joystick::AxisCount), 0.f);
+    }
 
     // Get the initial sensor states
     for (unsigned int i = 0; i < Sensor::Count; ++i)
@@ -184,6 +187,10 @@ void WindowImpl::processJoystickEvents()
             event.type = connected ? Event::JoystickConnected : Event::JoystickDisconnected;
             event.joystickButton.joystickId = i;
             pushEvent(event);
+
+            // Clear previous axes positions
+            if (connected)
+                std::fill_n(m_previousAxes[i], static_cast<std::size_t>(Joystick::AxisCount), 0.f);
         }
 
         if (connected)
@@ -194,7 +201,7 @@ void WindowImpl::processJoystickEvents()
                 if (caps.axes[j])
                 {
                     Joystick::Axis axis = static_cast<Joystick::Axis>(j);
-                    float prevPos = previousState.axes[axis];
+                    float prevPos = m_previousAxes[i][axis];
                     float currPos = m_joystickStates[i].axes[axis];
                     if (fabs(currPos - prevPos) >= m_joystickThreshold)
                     {
@@ -204,6 +211,8 @@ void WindowImpl::processJoystickEvents()
                         event.joystickMove.axis = axis;
                         event.joystickMove.position = currPos;
                         pushEvent(event);
+
+                        m_previousAxes[i][axis] = currPos;
                     }
                 }
             }

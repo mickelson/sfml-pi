@@ -1,6 +1,6 @@
 # SFML
 
-SFML - Copyright (C) 2007-2017 Laurent Gomila - laurent@sfml-dev.org
+SFML - Copyright (C) 2007-2018 Laurent Gomila - laurent@sfml-dev.org
 
 This software is provided 'as-is', without any express or implied warranty. In no event will the authors be held liable for any damages arising from the use of this software.
 
@@ -13,7 +13,6 @@ Permission is granted to anyone to use this software for any purpose, including 
 ## External libraries used by SFML
 
   * _OpenAL-Soft_ is under the LGPL license
-  * _libjpeg_ is public domain
   * _stb_image_ and _stb_image_write_ are public domain
   * _freetype_ is under the FreeType license or the GPL license
   * _libogg_ is under the BSD license

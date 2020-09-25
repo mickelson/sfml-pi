@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2017 Marco Antognini (antognini.marco@gmail.com),
+// Copyright (C) 2007-2018 Marco Antognini (antognini.marco@gmail.com),
 //                         Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
@@ -694,7 +694,7 @@ Keyboard::Key HIDInputManager::localizedKeys(UniChar ch)
 ////////////////////////////////////////////////////////
 Keyboard::Key HIDInputManager::nonLocalizedKeys(UniChar virtualKeycode)
 {
-    // (Some) 0x code based on http://forums.macrumors.com/showthread.php?t=780577
+    // (Some) 0x code based on https://forums.macrumors.com/showthread.php?t=780577
     // Some sf::Keyboard::Key are present twice.
     switch (virtualKeycode)
     {
